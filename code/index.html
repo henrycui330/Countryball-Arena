@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Countryball PVP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <section id="screen-menu" class="screen" aria-label="Main menu">
+      <div class="menu-stage">
+        <div class="menu-stage-bg" aria-hidden="true"></div>
+        <div class="menu-stage-shade" aria-hidden="true"></div>
+
+        <!-- TITLE -->
+        <div id="view-title" class="menu-view menu-view-title">
+          <div class="title-copy">
+            <p class="menu-kicker">Countryball Arena</p>
+            <h1 class="menu-brand">Countryball<br />PVP</h1>
+            <p class="menu-tagline">Flag-bearing chaos. One ball. One fight.</p>
+            <nav class="title-nav" aria-label="Main actions">
+              <button type="button" class="title-nav-btn" data-open-setup="quick" id="nav-quick">
+                Quick Match
+              </button>
+              <button type="button" class="title-nav-btn title-nav-btn-alt" data-open-setup="custom" id="nav-custom">
+                Custom Match
+              </button>
+            </nav>
+            <p class="menu-foot">USA · Japan · Russia · WASD · LMB · E · Q</p>
+          </div>
+          <div class="title-hero" aria-hidden="true">
+            <img class="title-hero-img" id="title-hero-img" src="assets/usa.png" alt="" width="280" height="280" />
+          </div>
+        </div>
+
+        <!-- SETUP -->
+        <div id="view-setup" class="menu-view menu-view-setup screen-hidden">
+          <button type="button" class="setup-back" id="btn-back-title">← Back</button>
+          <h2 id="setup-heading" class="setup-heading">Quick Match</h2>
+          <p id="match-desc" class="setup-lead">Pick opponent + map, then fight. Unlimited lives.</p>
+
+          <div class="setup-grid">
+            <div class="setup-block">
+              <p class="mode-label">Fighter</p>
+              <div class="mode-pick" role="group" aria-label="Fighter">
+                <button type="button" class="mode-btn is-selected" data-fighter="usa" id="fighter-usa">
+                  USA
+                </button>
+                <button type="button" class="mode-btn" data-fighter="japan" id="fighter-japan">
+                  Japan
+                </button>
+                <button type="button" class="mode-btn" data-fighter="russia" id="fighter-russia">
+                  Russia
+                </button>
+              </div>
+            </div>
+
+            <div class="setup-block">
+              <p class="mode-label">Opponent</p>
+              <div class="mode-pick" role="group" aria-label="Opponent">
+                <button type="button" class="mode-btn is-selected" data-opponent="dummy" id="opp-dummy">
+                  Dummy
+                </button>
+                <button type="button" class="mode-btn" data-opponent="easy" id="opp-easy">
+                  Easy Enemy
+                </button>
+                <button type="button" class="mode-btn" data-opponent="medium" id="opp-medium">
+                  Medium Enemy
+                </button>
+                <button type="button" class="mode-btn" data-opponent="hard" id="opp-hard">
+                  Hard Enemy
+                </button>
+              </div>
+            </div>
+
+            <div class="setup-block">
+              <p class="mode-label">Map</p>
+              <div class="mode-pick" role="group" aria-label="Map">
+                <button type="button" class="mode-btn is-selected" data-map="plains" id="map-plains">
+                  Plains
+                </button>
+                <button type="button" class="mode-btn" data-map="icy" id="map-icy">
+                  Icy
+                </button>
+              </div>
+              <p id="map-desc" class="mode-desc">Pixel plains — open grass arena.</p>
+            </div>
+
+            <div id="lives-row" class="setup-block lives-row screen-hidden">
+              <p class="mode-label">Lives <span class="lives-note">(same for both)</span></p>
+              <div class="lives-controls">
+                <button type="button" id="lives-minus" class="lives-btn" aria-label="Fewer lives">−</button>
+                <span id="lives-value" class="lives-value">3</span>
+                <button type="button" id="lives-plus" class="lives-btn" aria-label="More lives">+</button>
+              </div>
+              <p class="mode-desc">Never uneven — you both get this count.</p>
+            </div>
+          </div>
+
+          <div class="setup-actions">
+            <p class="setup-fighter">Fighter: <strong id="setup-fighter-name">USA</strong></p>
+            <button type="button" id="btn-play" class="menu-btn">Fight!</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-game" class="screen screen-hidden" aria-label="Arena">
+      <canvas id="game-canvas" width="960" height="540" aria-label="Countryball PVP game canvas"></canvas>
+      <div id="hud">
+        <span id="hud-abilities">LMB · E · Q Ult</span>
+        <button type="button" id="btn-menu" class="hud-btn">Menu</button>
+      </div>
+    </section>
+
+    <section id="screen-result" class="screen screen-hidden" aria-label="Match result">
+      <div class="menu-panel">
+        <h2 id="result-title" class="menu-title" style="font-size:2.4rem">Victory</h2>
+        <p id="result-sub" class="menu-sub">You win!</p>
+        <button type="button" id="btn-result-menu" class="menu-btn">Main Menu</button>
+      </div>
+    </section>
+
+    <section id="screen-win" class="screen screen-hidden" aria-label="Victory celebration">
+      <canvas id="win-canvas" width="960" height="540" aria-label="Win celebration"></canvas>
+      <div class="win-hud">
+        <button type="button" id="btn-win-menu" class="menu-btn">Main Menu</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="js/background.js"></script>
+  <script src="js/maps.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/effects.js"></script>
+  <script src="js/abilities/usa.js"></script>
+  <script src="js/abilities/japan.js"></script>
+  <script src="js/abilities/russia.js"></script>
+  <script src="js/allies.js"></script>
+  <script src="js/enemy.js"></script>
+  <script src="js/win-celebration.js"></script>
+  <script src="js/menu.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
