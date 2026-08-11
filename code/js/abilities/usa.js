@@ -325,6 +325,20 @@ window.CBUsaAbilities = (function () {
     );
   }
 
+  function getMeleeWeapon() {
+    return {
+      img: deagleImg,
+      w: 68,
+      h: 37,
+      pivotX: 68 * 0.34,
+      pivotY: 37 * 0.58,
+      muzzleLocalX: 68 * 0.94,
+      muzzleLocalY: 37 * 0.4,
+      handDist: 0.48,
+      plungeDamage: 22,
+    };
+  }
+
   return {
     name: "USA",
     spritePath: "assets/usa.png",
@@ -337,5 +351,6 @@ window.CBUsaAbilities = (function () {
     tickEagleTrail,
     tickChargeHold,
     aimVec,
+    getMeleeWeapon,
   };
 })();

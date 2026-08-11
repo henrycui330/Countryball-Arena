@@ -279,6 +279,20 @@ window.CBRussiaAbilities = (function () {
     );
   }
 
+  function getMeleeWeapon() {
+    return {
+      img: absolutImg,
+      w: BOTTLE.w,
+      h: BOTTLE.h,
+      pivotX: BOTTLE.pivotX,
+      pivotY: BOTTLE.pivotY,
+      muzzleLocalX: BOTTLE.tipX,
+      muzzleLocalY: BOTTLE.tipY,
+      handDist: BOTTLE.handDist,
+      plungeDamage: 23,
+    };
+  }
+
   return {
     name: "Russia",
     spritePath: "assets/russia.png",
@@ -289,5 +303,6 @@ window.CBRussiaAbilities = (function () {
     tickEagleTrail,
     tickChargeHold,
     aimVec,
+    getMeleeWeapon,
   };
 })();

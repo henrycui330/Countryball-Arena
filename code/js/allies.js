@@ -42,7 +42,7 @@ window.CBAllies = (function () {
         name: spec.name || "Ally",
         ownerId: owner.id,
         x: owner.x + Math.cos(ang) * spawnDist,
-        y: owner.y + Math.sin(ang) * spawnDist,
+        y: owner.y,
         radius: RADIUS,
         hp: MAX_HP,
         maxHp: MAX_HP,
@@ -56,13 +56,19 @@ window.CBAllies = (function () {
         facing: 1,
         invuln: false,
         stunned: false,
+        vy: 0,
+        grounded: true,
       };
       list.push(ally);
       console.log("[CBAllies] spawn " + ally.name);
     });
   }
 
-  function clamp(ent, W, H) {
+  function clamp(ent, W, H, map) {
+    if (window.CBMaps && window.CBMaps.applyGroundPhysics) {
+      window.CBMaps.applyGroundPhysics(ent, map, W, H, 0, { skipGravity: true });
+      return;
+    }
     const groundY = H * 0.72;
     const minY = ent.radius + 16;
     const maxY = groundY - 6;
@@ -70,7 +76,7 @@ window.CBAllies = (function () {
     ent.y = Math.max(minY, Math.min(maxY, ent.y));
   }
 
-  function update(dt, foe, W, H) {
+  function update(dt, foe, W, H, map) {
     for (let i = list.length - 1; i >= 0; i--) {
       const a = list[i];
       a.life -= dt;
@@ -87,23 +93,19 @@ window.CBAllies = (function () {
 
       const hasFoe = foe && foe.hp > 0;
       const tx = hasFoe ? foe.x : a.x;
-      const ty = hasFoe ? foe.y : a.y;
       const dx = tx - a.x;
-      const dy = ty - a.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      const nx = dx / dist;
-      const ny = dy / dist;
-      a.facing = dx >= 0 ? 1 : -1;
+      const distX = Math.abs(dx) || 1;
+      const nx = dx >= 0 ? 1 : -1;
+      a.facing = nx;
 
       if (a.phase === "slam") {
         a.slamTimer -= dt;
         a.x += nx * 420 * dt;
-        a.y += ny * 420 * dt;
-        if (hasFoe && dist < a.radius + (foe.radius || 38) + 4) {
+        if (hasFoe && distX < a.radius + (foe.radius || 38) + 4) {
           foe.hp = Math.max(0, foe.hp - SLAM_DAMAGE);
           foe.flash = 0.25;
           foe.x += nx * 10;
-          foe.y += ny * 6;
+          if (foe.vy != null) foe.vy = Math.min(foe.vy || 0, -120);
           if (window.CBEffects) {
             window.CBEffects.spawnBurst(a.x, a.y, 12, [
               "#d52b1e",
@@ -119,26 +121,16 @@ window.CBAllies = (function () {
           a.phase = "fight";
         }
       } else {
-        // Orbit / pressure fight
         const prefer = 48 + (a.id.charCodeAt(a.id.length - 1) % 5) * 6;
-        let mx = 0;
-        let my = 0;
         if (hasFoe) {
-          if (dist > prefer + 12) {
-            mx = nx;
-            my = ny;
-          } else if (dist < prefer - 10) {
-            mx = -nx;
-            my = -ny;
-          } else {
-            mx = -ny;
-            my = nx;
-          }
-          const len = Math.hypot(mx, my) || 1;
-          a.x += (mx / len) * MOVE_SPEED * dt;
-          a.y += (my / len) * MOVE_SPEED * dt;
+          let mx = 0;
+          if (distX > prefer + 12) mx = nx;
+          else if (distX < prefer - 10) mx = -nx;
+          else mx = (a.id.charCodeAt(a.id.length - 1) || 0) % 2 === 0 ? 1 : -1;
+          a.x += mx * MOVE_SPEED * dt;
 
           a.meleeTimer -= dt;
+          const dist = Math.hypot(foe.x - a.x, foe.y - a.y);
           if (a.meleeTimer <= 0 && dist < prefer + 18) {
             a.meleeTimer = MELEE_CD + Math.random() * 0.15;
             foe.hp = Math.max(0, foe.hp - MELEE_DAMAGE);
@@ -146,7 +138,7 @@ window.CBAllies = (function () {
             if (window.CBEffects) {
               window.CBEffects.spawnParticle(foe.x, foe.y, {
                 vx: nx * 40,
-                vy: ny * 40,
+                vy: -20,
                 life: 0.15,
                 size: 3,
                 color: "#fff",
@@ -156,7 +148,11 @@ window.CBAllies = (function () {
         }
       }
 
-      clamp(a, W, H);
+      if (window.CBMaps && window.CBMaps.applyGroundPhysics) {
+        window.CBMaps.applyGroundPhysics(a, map, W, H, dt);
+      } else {
+        clamp(a, W, H, map);
+      }
     }
   }
 

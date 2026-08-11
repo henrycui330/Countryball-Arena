@@ -317,6 +317,20 @@ window.CBJapanAbilities = (function () {
     );
   }
 
+  function getMeleeWeapon() {
+    return {
+      img: katanaImg,
+      w: KATANA.w,
+      h: KATANA.h,
+      pivotX: KATANA.pivotX,
+      pivotY: KATANA.pivotY,
+      muzzleLocalX: KATANA.tipX,
+      muzzleLocalY: KATANA.tipY,
+      handDist: KATANA.handDist,
+      plungeDamage: 24,
+    };
+  }
+
   return {
     name: "Japan",
     spritePath: "assets/japan.png",
@@ -328,5 +342,6 @@ window.CBJapanAbilities = (function () {
     tickEagleTrail,
     tickChargeHold,
     aimVec,
+    getMeleeWeapon,
   };
 })();

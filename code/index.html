@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Countryball PVP</title>
+  <title>Countryball PVP — Version 1.2</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet" />
@@ -11,6 +11,67 @@
 </head>
 <body>
   <div id="app">
+    <!-- AUTH (cloud login / register) -->
+    <section id="screen-auth" class="screen screen-hidden" aria-label="Account">
+      <div class="menu-stage auth-stage">
+        <div class="menu-stage-bg" aria-hidden="true"></div>
+        <div class="menu-stage-shade" aria-hidden="true"></div>
+        <div class="menu-view auth-view">
+          <p class="menu-kicker">Countryball Arena</p>
+          <h1 id="auth-title" class="setup-heading">Login</h1>
+          <p id="auth-lead" class="setup-lead">Sign in to load your Countryballs progress.</p>
+
+          <form id="auth-form" class="auth-form" autocomplete="on">
+            <label class="auth-label" for="auth-username">Username</label>
+            <input
+              id="auth-username"
+              class="auth-input"
+              name="username"
+              type="text"
+              maxlength="24"
+              required
+              autocomplete="username"
+              spellcheck="false"
+            />
+
+            <label class="auth-label" for="auth-password">Password</label>
+            <input
+              id="auth-password"
+              class="auth-input"
+              name="password"
+              type="password"
+              minlength="6"
+              required
+              autocomplete="current-password"
+            />
+
+            <div id="auth-confirm-row" class="screen-hidden">
+              <label class="auth-label" for="auth-confirm">Confirm password</label>
+              <input
+                id="auth-confirm"
+                class="auth-input"
+                name="confirm"
+                type="password"
+                minlength="6"
+                autocomplete="new-password"
+              />
+            </div>
+
+            <p id="auth-error" class="auth-error" role="alert"></p>
+
+            <button type="submit" id="btn-auth-submit" class="menu-btn">Sign in</button>
+          </form>
+
+          <button type="button" id="btn-auth-switch" class="auth-switch">
+            New here? Create an account
+          </button>
+          <button type="button" id="btn-auth-import-local" class="auth-switch auth-switch-muted">
+            After login: import old local progress
+          </button>
+        </div>
+      </div>
+    </section>
+
     <section id="screen-menu" class="screen" aria-label="Main menu">
       <div class="menu-stage">
         <div class="menu-stage-bg" aria-hidden="true"></div>
@@ -22,6 +83,10 @@
             <p class="menu-kicker">Countryball Arena</p>
             <h1 class="menu-brand">Countryball<br />PVP</h1>
             <p class="menu-tagline">Flag-bearing chaos. One ball. One fight.</p>
+            <p id="title-user" class="title-user screen-hidden">
+              Playing as <strong id="title-username">—</strong>
+              <button type="button" id="btn-logout" class="title-logout">Log out</button>
+            </p>
             <nav class="title-nav" aria-label="Main actions">
               <button type="button" class="title-nav-btn" data-open-setup="quick" id="nav-quick">
                 Quick Match
@@ -29,8 +94,15 @@
               <button type="button" class="title-nav-btn title-nav-btn-alt" data-open-setup="custom" id="nav-custom">
                 Custom Match
               </button>
+              <button type="button" class="title-nav-btn title-nav-btn-roster" id="nav-countryballs">
+                Countryballs
+              </button>
+              <button type="button" class="title-nav-btn title-nav-btn-gacha" id="nav-gacha">
+                Gacha
+              </button>
             </nav>
             <p class="menu-foot">USA · Japan · Russia · WASD · LMB · E · Q</p>
+            <p class="menu-version" id="game-version">Version 1.2</p>
           </div>
           <div class="title-hero" aria-hidden="true">
             <img class="title-hero-img" id="title-hero-img" src="assets/usa.png" alt="" width="280" height="280" />
@@ -106,6 +178,68 @@
             <button type="button" id="btn-play" class="menu-btn">Fight!</button>
           </div>
         </div>
+
+        <!-- COUNTRYBALLS (stats viewer) -->
+        <div id="view-countryballs" class="menu-view menu-view-countryballs screen-hidden">
+          <button type="button" class="setup-back" id="btn-back-countryballs">← Back</button>
+          <h2 class="setup-heading">Countryballs</h2>
+          <p class="setup-lead">
+            Your roster — fight to earn XP. Level-ups grant coin rewards.
+            <span class="cb-coin-bank">Coins: <strong id="cb-coins">0</strong></span>
+          </p>
+          <button type="button" id="btn-import-local" class="auth-switch auth-switch-muted cb-import-btn">
+            Import old browser progress into this account
+          </button>
+
+          <div class="cb-layout">
+            <div class="cb-roster" id="cb-roster" role="list" aria-label="Owned countryballs"></div>
+            <div class="cb-detail" id="cb-detail" aria-live="polite">
+              <div class="cb-portrait-wrap">
+                <img id="cb-portrait" class="cb-portrait" src="assets/usa.png" alt="" width="180" height="180" />
+                <img id="cb-hat" class="cb-hat screen-hidden" src="" alt="" />
+              </div>
+              <h3 id="cb-name" class="cb-name">USA</h3>
+              <p id="cb-level" class="cb-level">Level 1</p>
+              <div class="cb-xp" aria-label="Experience">
+                <div class="cb-xp-track">
+                  <div id="cb-xp-fill" class="cb-xp-fill" style="width:0%"></div>
+                </div>
+                <p id="cb-xp-label" class="cb-xp-label">0 / 65 XP</p>
+              </div>
+              <dl class="cb-stats">
+                <div><dt>HP</dt><dd id="cb-stat-hp">100</dd></div>
+                <div><dt>Atk</dt><dd id="cb-stat-atk">16</dd></div>
+                <div><dt>Special</dt><dd id="cb-stat-special">Cash Toss</dd></div>
+                <div><dt>Ultimate</dt><dd id="cb-stat-ult">Eagle Strike</dd></div>
+              </dl>
+              <p id="cb-blurb" class="cb-blurb">Deagle bash · charged spin-shot · cash toss · eagle ult</p>
+              <div class="cb-hats-block">
+                <p class="mode-label">Hat</p>
+                <div id="cb-hat-pick" class="cb-hat-pick" role="group" aria-label="Hat"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-gacha" class="screen screen-hidden" aria-label="Gacha">
+      <div class="gacha-layout">
+        <header class="gacha-top">
+          <button type="button" id="btn-gacha-back" class="cb-back">← Title</button>
+          <h1 class="gacha-title">Gacha</h1>
+          <p class="gacha-coins-line">Coins: <strong id="gacha-coins">0</strong></p>
+        </header>
+        <p class="gacha-sub">100 coins per pull · 1000 for ten · duplicates refund 20 coins</p>
+        <div class="gacha-actions">
+          <button type="button" id="btn-gacha-one" class="menu-btn gacha-pull-btn">Pull ×1 · 100</button>
+          <button type="button" id="btn-gacha-ten" class="menu-btn menu-btn-primary gacha-pull-btn">Pull ×10 · 1000</button>
+        </div>
+        <div class="gacha-reveal-bar screen-hidden" id="gacha-reveal-bar">
+          <p id="gacha-hint" class="gacha-hint">Click a card to flip it.</p>
+          <button type="button" id="btn-gacha-flip-all" class="menu-btn gacha-flip-all-btn">Flip all</button>
+        </div>
+        <div id="gacha-results" class="gacha-results" aria-live="polite"></div>
       </div>
     </section>
 
@@ -128,11 +262,15 @@
     <section id="screen-win" class="screen screen-hidden" aria-label="Victory celebration">
       <canvas id="win-canvas" width="960" height="540" aria-label="Win celebration"></canvas>
       <div class="win-hud">
+        <p id="win-reward" class="win-reward" aria-live="polite"></p>
         <button type="button" id="btn-win-menu" class="menu-btn">Main Menu</button>
       </div>
     </section>
   </div>
 
+  <script src="js/version.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
   <script src="js/background.js"></script>
   <script src="js/maps.js"></script>
   <script src="js/camera.js"></script>
@@ -143,6 +281,13 @@
   <script src="js/allies.js"></script>
   <script src="js/enemy.js"></script>
   <script src="js/win-celebration.js"></script>
+  <script src="js/cosmetics.js"></script>
+  <script src="js/countryballs.js"></script>
+  <script src="js/gacha.js"></script>
+  <script src="js/gacha-ui.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/auth-ui.js"></script>
+  <script src="js/countryballs-ui.js"></script>
   <script src="js/menu.js"></script>
   <script src="js/game.js"></script>
   <script src="js/main.js"></script>

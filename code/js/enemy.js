@@ -199,6 +199,38 @@ window.CBEnemyWeapons = (function () {
   return { ensure, tryMelee, tick, drawIdle, loadoutFor };
 })();
 
+/** Shared ground movement helpers for Easy / Medium / Hard bots. */
+window.CBBotPhysics = (function () {
+  function apply(ent, dt, W, H, map) {
+    if (window.CBMaps && window.CBMaps.applyGroundPhysics) {
+      window.CBMaps.applyGroundPhysics(ent, map, W, H, dt);
+    } else {
+      const floor = H * 0.72 - 6;
+      if (ent.vy == null) ent.vy = 0;
+      ent.vy += 1650 * dt;
+      ent.y += ent.vy * dt;
+      ent.x = Math.max(ent.radius, Math.min(W - ent.radius, ent.x));
+      if (ent.y >= floor) {
+        ent.y = floor;
+        ent.vy = 0;
+        ent.grounded = true;
+      } else {
+        ent.grounded = false;
+      }
+    }
+  }
+
+  /** Horizontal chase / strafe intent (−1, 0, 1). */
+  function groundMoveX(distX, dist, preferred, meleeRange, nx, strafeDir) {
+    if (distX > preferred + 40) return nx >= 0 ? 1 : -1;
+    if (dist < meleeRange) return nx >= 0 ? 1 : -1;
+    if (distX < preferred - 45) return nx >= 0 ? -1 : 1;
+    return strafeDir || 1;
+  }
+
+  return { apply, groundMoveX };
+})();
+
 window.CBEasyEnemy = (function () {
   const MOVE_SPEED = 95;
   const PREFERRED_DIST = 200;
@@ -228,18 +260,12 @@ window.CBEasyEnemy = (function () {
       stunTimer: 0,
       aimX: 0,
       aimY: 0,
+      vy: 0,
+      grounded: true,
     };
   }
 
-  function clamp(ent, W, H) {
-    const groundY = H * 0.72;
-    const minY = ent.radius + 20;
-    const maxY = groundY - 8;
-    ent.x = Math.max(ent.radius, Math.min(W - ent.radius, ent.x));
-    ent.y = Math.max(minY, Math.min(maxY, ent.y));
-  }
-
-  function update(ent, player, dt, W, H) {
+  function update(ent, player, dt, W, H, map) {
     if (!ent || ent.hp <= 0) return;
     window.CBEnemyWeapons.ensure();
 
@@ -247,12 +273,14 @@ window.CBEasyEnemy = (function () {
     window.CBEnemyWeapons.tick(ent, dt);
     if (ent.stunTimer > 0) {
       ent.stunTimer = Math.max(0, ent.stunTimer - dt);
+      window.CBBotPhysics.apply(ent, dt, W, H, map);
       return;
     }
 
     const dx = player.x - ent.x;
     const dy = player.y - ent.y;
     const dist = Math.hypot(dx, dy) || 1;
+    const distX = Math.abs(dx);
     const nx = dx / dist;
     const ny = dy / dist;
     ent.facing = dx >= 0 ? 1 : -1;
@@ -265,27 +293,19 @@ window.CBEasyEnemy = (function () {
       ent.strafeTimer = 1.2 + Math.random() * 1.4;
     }
 
-    let mx = 0;
-    let my = 0;
-    // Close in for Absolut bash when nearby
-    if (dist > PREFERRED_DIST + 40) {
-      mx = nx;
-      my = ny;
-    } else if (dist < MELEE_APPROACH) {
-      mx = nx * 0.35;
-      my = ny * 0.35;
-    } else if (dist < PREFERRED_DIST - 50) {
-      mx = -nx;
-      my = -ny;
-    } else {
-      mx = -ny * ent.strafeDir;
-      my = nx * ent.strafeDir;
+    const mx = window.CBBotPhysics.groundMoveX(
+      distX,
+      dist,
+      PREFERRED_DIST,
+      MELEE_APPROACH,
+      nx,
+      ent.strafeDir
+    );
+    if (mx !== 0) {
+      ent.x += mx * MOVE_SPEED * dt;
+      ent.facing = mx > 0 ? 1 : -1;
     }
-
-    const len = Math.hypot(mx, my) || 1;
-    ent.x += (mx / len) * MOVE_SPEED * dt;
-    ent.y += (my / len) * MOVE_SPEED * dt;
-    clamp(ent, W, H);
+    window.CBBotPhysics.apply(ent, dt, W, H, map);
 
     if (window.CBEnemyWeapons.tryMelee(ent, player)) {
       ent.shootTimer = Math.max(ent.shootTimer, 0.45);
@@ -371,15 +391,9 @@ window.CBMediumEnemy = (function () {
       stunTimer: 0,
       aimX: 0,
       aimY: 0,
+      vy: 0,
+      grounded: true,
     };
-  }
-
-  function clamp(ent, W, H) {
-    const groundY = H * 0.72;
-    const minY = ent.radius + 20;
-    const maxY = groundY - 8;
-    ent.x = Math.max(ent.radius, Math.min(W - ent.radius, ent.x));
-    ent.y = Math.max(minY, Math.min(maxY, ent.y));
   }
 
   function fireShot(ent, player) {
@@ -408,7 +422,7 @@ window.CBMediumEnemy = (function () {
     window.CBEffects.spawnBurst(muzzleX, muzzleY, 8, ["#ef6c00", "#fff"]);
   }
 
-  function update(ent, player, dt, W, H) {
+  function update(ent, player, dt, W, H, map) {
     if (!ent || ent.hp <= 0) return;
     window.CBEnemyWeapons.ensure();
 
@@ -416,14 +430,15 @@ window.CBMediumEnemy = (function () {
     window.CBEnemyWeapons.tick(ent, dt);
     if (ent.stunTimer > 0) {
       ent.stunTimer = Math.max(0, ent.stunTimer - dt);
+      window.CBBotPhysics.apply(ent, dt, W, H, map);
       return;
     }
 
     const dx = player.x - ent.x;
     const dy = player.y - ent.y;
     const dist = Math.hypot(dx, dy) || 1;
+    const distX = Math.abs(dx);
     const nx = dx / dist;
-    const ny = dy / dist;
     ent.facing = dx >= 0 ? 1 : -1;
     ent.aimX = player.x;
     ent.aimY = player.y;
@@ -434,26 +449,19 @@ window.CBMediumEnemy = (function () {
       ent.strafeTimer = 0.7 + Math.random() * 0.9;
     }
 
-    let mx = 0;
-    let my = 0;
-    if (dist > PREFERRED_DIST + 35) {
-      mx = nx;
-      my = ny;
-    } else if (dist < MELEE_APPROACH) {
-      mx = nx * 0.5;
-      my = ny * 0.5;
-    } else if (dist < PREFERRED_DIST - 40) {
-      mx = -nx * 1.1;
-      my = -ny * 1.1;
-    } else {
-      mx = -ny * ent.strafeDir * 1.15;
-      my = nx * ent.strafeDir * 1.15;
+    const mx = window.CBBotPhysics.groundMoveX(
+      distX,
+      dist,
+      PREFERRED_DIST,
+      MELEE_APPROACH,
+      nx,
+      ent.strafeDir
+    );
+    if (mx !== 0) {
+      ent.x += mx * MOVE_SPEED * dt;
+      ent.facing = mx > 0 ? 1 : -1;
     }
-
-    const len = Math.hypot(mx, my) || 1;
-    ent.x += (mx / len) * MOVE_SPEED * dt;
-    ent.y += (my / len) * MOVE_SPEED * dt;
-    clamp(ent, W, H);
+    window.CBBotPhysics.apply(ent, dt, W, H, map);
 
     if (window.CBEnemyWeapons.tryMelee(ent, player)) {
       ent.burstLeft = 0;
@@ -550,15 +558,9 @@ window.CBHardEnemy = (function () {
       dashVy: 0,
       aimX: 0,
       aimY: 0,
+      vy: 0,
+      grounded: true,
     };
-  }
-
-  function clamp(ent, W, H) {
-    const groundY = H * 0.72;
-    const minY = ent.radius + 20;
-    const maxY = groundY - 8;
-    ent.x = Math.max(ent.radius, Math.min(W - ent.radius, ent.x));
-    ent.y = Math.max(minY, Math.min(maxY, ent.y));
   }
 
   function fireShot(ent, player, angOffset) {
@@ -589,7 +591,7 @@ window.CBHardEnemy = (function () {
     window.CBEffects.spawnBurst(muzzleX, muzzleY, 7, ["#6a1b9a", "#fff"]);
   }
 
-  function update(ent, player, dt, W, H) {
+  function update(ent, player, dt, W, H, map) {
     if (!ent || ent.hp <= 0) return;
     window.CBEnemyWeapons.ensure();
 
@@ -597,14 +599,15 @@ window.CBHardEnemy = (function () {
     window.CBEnemyWeapons.tick(ent, dt);
     if (ent.stunTimer > 0) {
       ent.stunTimer = Math.max(0, ent.stunTimer - dt);
+      window.CBBotPhysics.apply(ent, dt, W, H, map);
       return;
     }
 
     const dx = player.x - ent.x;
     const dy = player.y - ent.y;
     const dist = Math.hypot(dx, dy) || 1;
+    const distX = Math.abs(dx);
     const nx = dx / dist;
-    const ny = dy / dist;
     ent.facing = dx >= 0 ? 1 : -1;
     ent.aimX = player.x;
     ent.aimY = player.y;
@@ -612,8 +615,6 @@ window.CBHardEnemy = (function () {
     if (ent.dashTimer > 0) {
       ent.dashTimer -= dt;
       ent.x += ent.dashVx * dt;
-      ent.y += ent.dashVy * dt;
-      clamp(ent, W, H);
     } else {
       ent.strafeTimer -= dt;
       if (ent.strafeTimer <= 0) {
@@ -621,32 +622,25 @@ window.CBHardEnemy = (function () {
         ent.strafeTimer = 0.45 + Math.random() * 0.55;
         if (Math.random() < 0.35) {
           ent.dashTimer = 0.18;
-          ent.dashVx = -ny * ent.strafeDir * 520;
-          ent.dashVy = nx * ent.strafeDir * 520;
+          ent.dashVx = ent.strafeDir * 520;
+          ent.dashVy = 0;
         }
       }
 
-      let mx = 0;
-      let my = 0;
-      if (dist > PREFERRED_DIST + 30) {
-        mx = nx * 1.15;
-        my = ny * 1.15;
-      } else if (dist < MELEE_APPROACH) {
-        mx = nx * 0.85;
-        my = ny * 0.85;
-      } else if (dist < PREFERRED_DIST - 35) {
-        mx = -nx * 1.25;
-        my = -ny * 1.25;
-      } else {
-        mx = -ny * ent.strafeDir * 1.35;
-        my = nx * ent.strafeDir * 1.35;
+      const mx = window.CBBotPhysics.groundMoveX(
+        distX,
+        dist,
+        PREFERRED_DIST,
+        MELEE_APPROACH,
+        nx,
+        ent.strafeDir
+      );
+      if (mx !== 0) {
+        ent.x += mx * MOVE_SPEED * dt;
+        ent.facing = mx > 0 ? 1 : -1;
       }
-
-      const len = Math.hypot(mx, my) || 1;
-      ent.x += (mx / len) * MOVE_SPEED * dt;
-      ent.y += (my / len) * MOVE_SPEED * dt;
-      clamp(ent, W, H);
     }
+    window.CBBotPhysics.apply(ent, dt, W, H, map);
 
     if (window.CBEnemyWeapons.tryMelee(ent, player)) {
       ent.burstLeft = 0;

@@ -7,7 +7,7 @@ window.CBMenu = (function () {
     mapId: "plains",
     lives: 3,
     fighter: "usa",
-    view: "title", // title | setup
+    view: "title", // title | setup | countryballs | gacha
   };
 
   const MATCH_DESC = {
@@ -35,11 +35,17 @@ window.CBMenu = (function () {
   const LIVES_MIN = 1;
   const LIVES_MAX = 100;
 
+  function hideGachaScreen() {
+    const gacha = document.getElementById("screen-gacha");
+    if (gacha) gacha.classList.add("screen-hidden");
+  }
+
   function show() {
     const menu = document.getElementById("screen-menu");
     const game = document.getElementById("screen-game");
     const result = document.getElementById("screen-result");
     const win = document.getElementById("screen-win");
+    hideGachaScreen();
     if (menu) menu.classList.remove("screen-hidden");
     if (game) game.classList.add("screen-hidden");
     if (result) result.classList.add("screen-hidden");
@@ -51,14 +57,26 @@ window.CBMenu = (function () {
   function hide() {
     const menu = document.getElementById("screen-menu");
     if (menu) menu.classList.add("screen-hidden");
+    hideGachaScreen();
+  }
+
+  function hideAllViews() {
+    const title = document.getElementById("view-title");
+    const setup = document.getElementById("view-setup");
+    const balls = document.getElementById("view-countryballs");
+    if (title) title.classList.add("screen-hidden");
+    if (setup) setup.classList.add("screen-hidden");
+    if (balls) balls.classList.add("screen-hidden");
   }
 
   function showTitle() {
     state.view = "title";
+    hideGachaScreen();
+    hideAllViews();
+    const menu = document.getElementById("screen-menu");
+    if (menu) menu.classList.remove("screen-hidden");
     const title = document.getElementById("view-title");
-    const setup = document.getElementById("view-setup");
     if (title) title.classList.remove("screen-hidden");
-    if (setup) setup.classList.add("screen-hidden");
   }
 
   function showSetup(matchType) {
@@ -66,9 +84,11 @@ window.CBMenu = (function () {
       state.matchType = matchType;
     }
     state.view = "setup";
-    const title = document.getElementById("view-title");
+    hideGachaScreen();
+    hideAllViews();
+    const menu = document.getElementById("screen-menu");
+    if (menu) menu.classList.remove("screen-hidden");
     const setup = document.getElementById("view-setup");
-    if (title) title.classList.add("screen-hidden");
     if (setup) setup.classList.remove("screen-hidden");
     const heading = document.getElementById("setup-heading");
     if (heading) {
@@ -79,10 +99,41 @@ window.CBMenu = (function () {
     console.log("[CBMenu] setup view", state.matchType);
   }
 
+  function showCountryballs() {
+    state.view = "countryballs";
+    hideGachaScreen();
+    hideAllViews();
+    const menu = document.getElementById("screen-menu");
+    if (menu) menu.classList.remove("screen-hidden");
+    const balls = document.getElementById("view-countryballs");
+    if (balls) balls.classList.remove("screen-hidden");
+    if (window.CBCountryballsUI) CBCountryballsUI.show();
+    console.log("[CBMenu] countryballs view");
+  }
+
+  function showGacha() {
+    state.view = "gacha";
+    hideAllViews();
+    const menu = document.getElementById("screen-menu");
+    if (menu) menu.classList.add("screen-hidden");
+    const gacha = document.getElementById("screen-gacha");
+    if (gacha) gacha.classList.remove("screen-hidden");
+    if (window.CBGachaUI) CBGachaUI.show();
+    console.log("[CBMenu] gacha view");
+  }
+
   function syncButtons(attr, value) {
     document.querySelectorAll("[" + attr + "]").forEach(function (btn) {
       btn.classList.toggle("is-selected", btn.getAttribute(attr) === value);
     });
+  }
+
+  function fighterOwned(id) {
+    if (id === "usa") return true;
+    if (window.CBCountryballs && CBCountryballs.isCharacterOwned) {
+      return CBCountryballs.isCharacterOwned(id);
+    }
+    return true;
   }
 
   function syncLivesUi() {
@@ -95,7 +146,19 @@ window.CBMenu = (function () {
   }
 
   function syncFighterUi() {
-    syncButtons("data-fighter", state.fighter);
+    if (!fighterOwned(state.fighter)) {
+      state.fighter = "usa";
+    }
+    document.querySelectorAll("[data-fighter]").forEach(function (btn) {
+      const id = btn.getAttribute("data-fighter");
+      const owned = fighterOwned(id);
+      btn.classList.toggle("is-selected", id === state.fighter);
+      btn.classList.toggle("is-locked", !owned);
+      btn.disabled = !owned;
+      btn.title = owned
+        ? FIGHTER_LABEL[id] || id
+        : "Unlock in Gacha";
+    });
     const name = document.getElementById("setup-fighter-name");
     if (name) name.textContent = FIGHTER_LABEL[state.fighter] || "USA";
     const hero = document.getElementById("title-hero-img");
@@ -132,6 +195,10 @@ window.CBMenu = (function () {
 
   function setFighter(id) {
     if (id !== "usa" && id !== "japan" && id !== "russia") return;
+    if (!fighterOwned(id)) {
+      console.warn("[CBMenu] fighter locked:", id);
+      return;
+    }
     state.fighter = id;
     syncAll();
     console.log("[CBMenu] fighter=" + state.fighter);
@@ -144,6 +211,9 @@ window.CBMenu = (function () {
   }
 
   function getConfig() {
+    if (!fighterOwned(state.fighter)) {
+      state.fighter = "usa";
+    }
     return {
       matchType: state.matchType,
       opponent: state.opponent,
@@ -168,6 +238,37 @@ window.CBMenu = (function () {
         showTitle();
       });
     }
+
+    const backBalls = document.getElementById("btn-back-countryballs");
+    if (backBalls) {
+      backBalls.addEventListener("click", function () {
+        showTitle();
+      });
+    }
+
+    const navBalls = document.getElementById("nav-countryballs");
+    if (navBalls) {
+      navBalls.addEventListener("click", function () {
+        showCountryballs();
+      });
+    }
+
+    const navGacha = document.getElementById("nav-gacha");
+    if (navGacha) {
+      navGacha.addEventListener("click", function () {
+        showGacha();
+      });
+    }
+
+    const backGacha = document.getElementById("btn-gacha-back");
+    if (backGacha) {
+      backGacha.addEventListener("click", function () {
+        showTitle();
+      });
+    }
+
+    if (window.CBCountryballsUI) CBCountryballsUI.init();
+    if (window.CBGachaUI) CBGachaUI.init();
 
     document.querySelectorAll("[data-opponent]").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -229,6 +330,8 @@ window.CBMenu = (function () {
     getConfig,
     showTitle,
     showSetup,
+    showCountryballs,
+    showGacha,
     setOpponent,
     setMap,
     setFighter,

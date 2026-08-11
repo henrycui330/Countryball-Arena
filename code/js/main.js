@@ -1,19 +1,53 @@
 (function () {
   function hideAllOverlayScreens() {
-    ["screen-result", "screen-win", "screen-game"].forEach(function (id) {
-      const el = document.getElementById(id);
-      if (el) el.classList.add("screen-hidden");
-    });
+    ["screen-result", "screen-win", "screen-game", "screen-auth"].forEach(
+      function (id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add("screen-hidden");
+      }
+    );
+  }
+
+  function syncTitleUser() {
+    const wrap = document.getElementById("title-user");
+    const name = document.getElementById("title-username");
+    const loggedIn = window.CBAuth && CBAuth.isLoggedIn();
+    if (wrap) wrap.classList.toggle("screen-hidden", !loggedIn);
+    if (name) name.textContent = loggedIn ? CBAuth.getUsername() || "—" : "—";
+  }
+
+  function enterApp() {
+    hideAllOverlayScreens();
+    syncTitleUser();
+    window.CBMenu.show();
+  }
+
+  function showAuth() {
+    window.CBGame.stop();
+    if (window.CBWinCelebration) window.CBWinCelebration.stop();
+    hideAllOverlayScreens();
+    const menu = document.getElementById("screen-menu");
+    if (menu) menu.classList.add("screen-hidden");
+    if (window.CBAuthUI) CBAuthUI.show();
   }
 
   function showMenu() {
     window.CBGame.stop();
     if (window.CBWinCelebration) window.CBWinCelebration.stop();
     hideAllOverlayScreens();
+    if (window.CBAuth && !CBAuth.isLoggedIn()) {
+      showAuth();
+      return;
+    }
+    syncTitleUser();
     window.CBMenu.show();
   }
 
   function startGame(cfg) {
+    if (window.CBAuth && !CBAuth.isLoggedIn()) {
+      showAuth();
+      return;
+    }
     if (window.CBWinCelebration) window.CBWinCelebration.stop();
     hideAllOverlayScreens();
     window.CBMenu.hide();
@@ -32,9 +66,27 @@
     console.log("[CBMain] defeat", result);
   }
 
+  function fillWinReward() {
+    const el = document.getElementById("win-reward");
+    if (!el) return;
+    const award =
+      window.CBCountryballs && CBCountryballs.getLastAward
+        ? CBCountryballs.getLastAward()
+        : null;
+    if (!award) {
+      el.textContent = "";
+      return;
+    }
+    el.textContent = award.summary || "";
+    el.classList.toggle("is-levelup", !!award.levelsGained);
+  }
+
   function onMatchEnd(result) {
     if (result && result.won) {
-      // Smash-style win celeb on plains BG
+      fillWinReward();
+      if (window.CBAuth && CBAuth.isLoggedIn() && CBAuth.pushSaveNow) {
+        CBAuth.pushSaveNow();
+      }
       if (window.CBWinCelebration) {
         window.CBWinCelebration.start({
           fighter:
@@ -52,6 +104,8 @@
       if (window.CBWinCelebration) window.CBWinCelebration.stop();
       const win = document.getElementById("screen-win");
       if (win) win.classList.add("screen-hidden");
+      const reward = document.getElementById("win-reward");
+      if (reward) reward.textContent = "";
       showDefeat(result);
     }
     console.log("[CBMain] match end", result);
@@ -62,6 +116,11 @@
     onExitToMenu: showMenu,
     onMatchEnd: onMatchEnd,
   });
+  window.CBAuthUI.init({
+    onReady: function () {
+      enterApp();
+    },
+  });
 
   const winMenu = document.getElementById("btn-win-menu");
   if (winMenu) {
@@ -70,8 +129,39 @@
     });
   }
 
+  const logoutBtn = document.getElementById("btn-logout");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", async function () {
+      if (window.CBAuth) await CBAuth.logout();
+      showAuth();
+    });
+  }
+
   if (window.CBWinCelebration) window.CBWinCelebration.ensureAssets();
 
-  window.CBMenu.show();
-  console.log("[CBMain] boot — Quick / Custom + win celebration");
+  (async function boot() {
+    if (window.CBVersion) {
+      const verEl = document.getElementById("game-version");
+      if (verEl) verEl.textContent = CBVersion.label;
+      document.title = "Countryball PVP — " + CBVersion.label;
+      console.log("[CBMain]", CBVersion.label);
+    }
+    const menu = document.getElementById("screen-menu");
+    if (menu) menu.classList.add("screen-hidden");
+    if (window.CBAuth) {
+      const res = await CBAuth.init({
+        onAuthChange: function () {
+          syncTitleUser();
+        },
+      });
+      if (res && res.loggedIn) {
+        enterApp();
+      } else {
+        showAuth();
+      }
+    } else {
+      enterApp();
+    }
+    console.log("[CBMain] boot — auth + cloud saves");
+  })();
 })();

@@ -544,6 +544,35 @@ window.CBEffects = (function () {
   }
 
   /**
+   * Aerial plunge: weapon tip-down while diving; removed when life ends (game lands).
+   */
+  function spawnPlungeAttack(opts) {
+    const o = opts || {};
+    const life = o.life ?? 2.5;
+    const w = o.w ?? 68;
+    const h = o.h ?? 37;
+    return add({
+      type: "plungeAttack",
+      follow: o.follow || null,
+      img: o.img || null,
+      w,
+      h,
+      pivotX: o.pivotX ?? w * 0.34,
+      pivotY: o.pivotY ?? h * 0.58,
+      muzzleX: o.muzzleLocalX ?? w * 0.94,
+      muzzleY: o.muzzleLocalY ?? h * 0.4,
+      rotOffset: o.rotOffset ?? 0,
+      handX: 0,
+      handY: 0,
+      rot: Math.PI / 2 + (o.rotOffset || 0),
+      life,
+      maxLife: life,
+      handDist: o.handDist ?? 0.45,
+      tipDown: true,
+    });
+  }
+
+  /**
    * Ult: white screen, black silhouettes, lightning dash past foe, fatal stab.
    */
   function spawnJapanCinemaUlt(opts) {
@@ -945,6 +974,20 @@ window.CBEffects = (function () {
         e.y = e.handY;
       }
 
+      if (e.type === "plungeAttack") {
+        const p = e.follow;
+        if (p) {
+          e.handX = p.x;
+          e.handY = p.y + p.radius * (e.handDist || 0.45);
+          // Rotate so local tip points straight down (works for deagle / katana / bottle)
+          const lx = (e.muzzleX || 0) - (e.pivotX || 0);
+          const ly = (e.muzzleY || 0) - (e.pivotY || 0);
+          e.rot = Math.PI / 2 - Math.atan2(ly, lx);
+        }
+        e.x = e.handX;
+        e.y = e.handY;
+      }
+
       if (e.type === "japanUlt") {
         e.phaseLife -= dt;
         const p = e.player;
@@ -1280,7 +1323,7 @@ window.CBEffects = (function () {
           ctx.fillRect(-e.pivotX, -e.pivotY, e.w, e.h);
         }
         ctx.restore();
-      } else if (e.type === "vodkaBarrage" || e.type === "drinkPose") {
+      } else if (e.type === "vodkaBarrage" || e.type === "drinkPose" || e.type === "plungeAttack") {
         ctx.save();
         ctx.globalAlpha = 1;
         ctx.translate(e.handX, e.handY);
@@ -1348,6 +1391,7 @@ window.CBEffects = (function () {
     spawnKatanaCharge,
     spawnVodkaBarrage,
     spawnDrinkPose,
+    spawnPlungeAttack,
     spawnJapanCinemaUlt,
     spawnEagleFlyby,
     spawnSpriteProjectile,

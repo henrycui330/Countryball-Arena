@@ -2,6 +2,10 @@ window.CBGame = (function () {
   const W = 960;
   const H = 540;
   const MOVE_SPEED = 260;
+  const GRAVITY = 1650;
+  const JUMP_VY = -560;
+  const PLUNGE_VY = 980;
+  const PLUNGE_HIT_RADIUS = 58;
   const HOLD_TAP_MAX = 0.22;
   const HOLD_FULL = 1.05;
   const ULT_MAX = 100;
@@ -54,6 +58,7 @@ window.CBGame = (function () {
   let mouse = { x: W * 0.7, y: H * 0.5, down: false };
   let holdTime = 0;
   let holdingAttack = false;
+  let plungeFx = null;
 
   function normalizeConfig(cfg) {
     const c = cfg || {};
@@ -126,7 +131,7 @@ window.CBGame = (function () {
 
   function resetState() {
     map = window.CBMaps ? window.CBMaps.get(matchConfig.mapId) : { groundY: H * 0.72, platforms: [] };
-    const spawnY = (map.groundY || H * 0.72) - 50;
+    const spawnY = (map.groundY || H * 0.72) - 6;
 
     fighterImg = pickFighterImg();
     player = {
@@ -146,7 +151,11 @@ window.CBGame = (function () {
       aimX: W * 0.7,
       aimY: H * 0.5,
       invuln: false,
+      vy: 0,
+      grounded: true,
+      plunging: false,
     };
+    plungeFx = null;
     abilityLock = 0;
     speedBuff = null;
     dummy = null;
@@ -160,6 +169,8 @@ window.CBGame = (function () {
         hp: 100,
         maxHp: 100,
         flash: 0,
+        vy: 0,
+        grounded: true,
       };
     } else {
       enemy = enemyApi().create();
@@ -291,6 +302,158 @@ window.CBGame = (function () {
     }
   }
 
+  function floorY() {
+    const groundY = map && map.groundY != null ? map.groundY : H * 0.72;
+    return groundY - 6;
+  }
+
+  function clearPlungeFx() {
+    if (plungeFx) {
+      plungeFx.life = 0;
+      plungeFx = null;
+    }
+  }
+
+  function startPlunge() {
+    if (!player || player.plunging || player.grounded) return false;
+    const cinema = window.CBEffects && window.CBEffects.getCinema
+      ? window.CBEffects.getCinema()
+      : null;
+    if (abilityLock > 0 || (cinema && cinema.lockControl)) return false;
+
+    holdingAttack = false;
+    holdTime = 0;
+    mouse.down = false;
+
+    const wpn =
+      typeof abilities().getMeleeWeapon === "function"
+        ? abilities().getMeleeWeapon()
+        : null;
+    if (!wpn || !window.CBEffects || !window.CBEffects.spawnPlungeAttack) {
+      console.warn("[CBGame] plunge weapon missing");
+      return false;
+    }
+
+    player.plunging = true;
+    player.vy = PLUNGE_VY;
+    clearPlungeFx();
+    plungeFx = window.CBEffects.spawnPlungeAttack({
+      follow: player,
+      img: wpn.img,
+      w: wpn.w,
+      h: wpn.h,
+      pivotX: wpn.pivotX,
+      pivotY: wpn.pivotY,
+      muzzleLocalX: wpn.muzzleLocalX,
+      muzzleLocalY: wpn.muzzleLocalY,
+      handDist: wpn.handDist ?? 0.48,
+      life: 2.5,
+    });
+    cooldowns.freedomBlast = Math.max(cooldowns.freedomBlast || 0, 0.35);
+    statusMsg = "Plunge!";
+    statusTimer = 0.6;
+    console.log("[CBGame] plunge start");
+    return true;
+  }
+
+  function plungeImpact() {
+    if (!player || !player.plunging) return;
+    player.plunging = false;
+    clearPlungeFx();
+
+    const wpn =
+      typeof abilities().getMeleeWeapon === "function"
+        ? abilities().getMeleeWeapon()
+        : {};
+    const dmg = wpn.plungeDamage || 22;
+    const target = foe();
+    const hitY = player.y + player.radius * 0.35;
+
+    if (window.CBEffects) {
+      window.CBEffects.spawnBurst(player.x, hitY, 18, [
+        "#ffffff",
+        "#f7d354",
+        "#b22234",
+      ]);
+      window.CBEffects.spawnParticle(player.x, hitY, {
+        vx: 0,
+        vy: -80,
+        life: 0.25,
+        size: 8,
+        color: "#ffffff",
+      });
+    }
+    if (window.CBCamera) window.CBCamera.addShake(0.35);
+
+    if (target && target.hp > 0) {
+      const dx = target.x - player.x;
+      const dy = target.y - player.y;
+      const dist = Math.hypot(dx, dy);
+      const reach = PLUNGE_HIT_RADIUS + (target.radius || 30);
+      if (dist < reach) {
+        const finisher = dmg >= target.hp;
+        target.hp = Math.max(0, target.hp - dmg);
+        target.flash = 0.25;
+        const nx = dist > 1 ? dx / dist : player.facing || 1;
+        target.x += nx * 28;
+        if (target.vy != null) target.vy = -260;
+        else target.y -= 18;
+        if (window.CBMaps && map) {
+          window.CBMaps.resolveEntity(target, map, W, H);
+        } else {
+          clampEntity(target);
+        }
+        console.log(
+          "[CBGame] plunge hit dmg=" + dmg + " foeHp=" + target.hp
+        );
+        if (finisher) startFinisherSloMo("plunge");
+      } else {
+        console.log("[CBGame] plunge miss dist=" + dist.toFixed(0));
+      }
+    }
+  }
+
+  function tryJump() {
+    if (!player || !player.grounded || player.plunging) return;
+    const cinema = window.CBEffects && window.CBEffects.getCinema
+      ? window.CBEffects.getCinema()
+      : null;
+    if (abilityLock > 0 || (cinema && cinema.lockControl)) return;
+    player.vy = JUMP_VY;
+    player.grounded = false;
+    console.log("[CBGame] jump");
+  }
+
+  function applyPlayerPhysics(dt) {
+    if (!player) return;
+    const r = player.radius;
+    const minY = r + 16;
+    const floor = floorY();
+
+    if (player.plunging) {
+      player.vy = PLUNGE_VY;
+    } else {
+      player.vy += GRAVITY * dt;
+    }
+
+    player.y += player.vy * dt;
+    player.x = Math.max(r, Math.min(W - r, player.x));
+
+    if (player.y < minY) {
+      player.y = minY;
+      if (player.vy < 0) player.vy = 0;
+    }
+
+    if (player.y >= floor) {
+      player.y = floor;
+      if (player.plunging) plungeImpact();
+      player.vy = 0;
+      player.grounded = true;
+    } else {
+      player.grounded = false;
+    }
+  }
+
   function endMatch(won) {
     if (matchOver) return;
     matchOver = true;
@@ -318,6 +481,7 @@ window.CBGame = (function () {
       ? window.CBEffects.getCinema()
       : null;
     if (abilityLock > 0 || (cinema && cinema.lockControl)) return;
+    if (player && (player.plunging || !player.grounded)) return;
 
     updateAimFromMouse();
 
@@ -433,6 +597,13 @@ window.CBGame = (function () {
       e.preventDefault();
       if (!e.repeat) castUltimate();
     }
+    if (
+      (e.code === "Space" || e.code === "KeyW" || e.code === "ArrowUp") &&
+      !e.repeat
+    ) {
+      e.preventDefault();
+      tryJump();
+    }
   }
 
   function onKeyUp(e) {
@@ -454,10 +625,15 @@ window.CBGame = (function () {
     const p = canvasCoords(e);
     mouse.x = p.x;
     mouse.y = p.y;
+    updateAimFromMouse();
+
+    if (player && !player.grounded && !player.plunging) {
+      if (startPlunge()) return;
+    }
+
     mouse.down = true;
     holdingAttack = true;
     holdTime = 0;
-    updateAimFromMouse();
   }
 
   function onMouseUp(e) {
@@ -495,7 +671,7 @@ window.CBGame = (function () {
 
     addUlt(ULT_PASSIVE * dt);
 
-    if (holdingAttack && !controlsLocked) {
+    if (holdingAttack && !controlsLocked && player.grounded && !player.plunging) {
       holdTime += dt;
       if (holdTime > HOLD_TAP_MAX) {
         const charge = Math.min(
@@ -514,27 +690,38 @@ window.CBGame = (function () {
       player.y += dashVy * dt;
       if (Math.abs(dashVx) > 10) player.facing = dashVx >= 0 ? 1 : -1;
       abilities().tickEagleTrail(player);
+      // Dashing overrides gravity briefly — still clamp to arena
+      clampEntity(player);
+      player.grounded = player.y >= floorY() - 0.5;
+      if (player.grounded) player.vy = 0;
     } else if (!controlsLocked) {
       let mx = 0;
-      let my = 0;
       if (keys.KeyA || keys.ArrowLeft) mx -= 1;
       if (keys.KeyD || keys.ArrowRight) mx += 1;
-      if (keys.KeyW || keys.ArrowUp) my -= 1;
-      if (keys.KeyS || keys.ArrowDown) my += 1;
-      if (mx !== 0 || my !== 0) {
-        const len = Math.hypot(mx, my) || 1;
-        player.x += (mx / len) * MOVE_SPEED * moveMult * dt;
-        player.y += (my / len) * MOVE_SPEED * moveMult * dt;
-        if (mx !== 0) player.facing = mx > 0 ? 1 : -1;
+      if (mx !== 0) {
+        const airMul = player.grounded ? 1 : 0.9;
+        const plungeMul = player.plunging ? 0.45 : 1;
+        player.x += mx * MOVE_SPEED * moveMult * airMul * plungeMul * dt;
+        player.facing = mx > 0 ? 1 : -1;
       }
+      applyPlayerPhysics(dt);
+    } else {
+      applyPlayerPhysics(dt);
     }
 
     updateAimFromMouse();
-    clampEntity(player);
 
     if (isBotOpponent() && enemy && enemy.hp > 0) {
-      enemyApi().update(enemy, player, dt, W, H);
-      clampEntity(enemy);
+      enemyApi().update(enemy, player, dt, W, H, map);
+      // Physics already applied in bot update — keep x in arena only if needed
+      if (window.CBMaps && map) {
+        enemy.x = Math.max(
+          enemy.radius,
+          Math.min(W - enemy.radius, enemy.x)
+        );
+      } else {
+        clampEntity(enemy);
+      }
     }
 
     if (window.CBBackground.update) {
@@ -545,10 +732,14 @@ window.CBGame = (function () {
     const foeHpBefore = target ? target.hp : 0;
 
     if (window.CBAllies) {
-      window.CBAllies.update(dt, target, W, H);
-      const allies = window.CBAllies.getList();
-      for (let i = 0; i < allies.length; i++) {
-        clampEntity(allies[i]);
+      window.CBAllies.update(dt, target, W, H, map);
+    }
+
+    if (dummy && dummy.hp > 0) {
+      if (window.CBMaps && window.CBMaps.applyGroundPhysics) {
+        window.CBMaps.applyGroundPhysics(dummy, map, W, H, dt);
+      } else {
+        clampEntity(dummy);
       }
     }
 
@@ -594,6 +785,13 @@ window.CBGame = (function () {
           respawnEvent = { kind: "dummy", timer: 1.0 };
         }
         if (sloMo) sloMo.endReal = 0.85;
+        if (window.CBCountryballs && CBCountryballs.awardFoeKo) {
+          const award = CBCountryballs.awardFoeKo(matchConfig);
+          if (award) {
+            statusMsg = award.summary;
+            statusTimer = award.levelsGained > 0 ? 2.8 : 2.0;
+          }
+        }
       }
 
       if (isBotOpponent() && enemy && enemy.hp <= 0) {
@@ -612,6 +810,13 @@ window.CBGame = (function () {
           respawnEvent = { kind: "enemy", timer: 1.15 };
         }
         if (sloMo) sloMo.endReal = 0.85;
+        if (window.CBCountryballs && CBCountryballs.awardFoeKo) {
+          const award = CBCountryballs.awardFoeKo(matchConfig);
+          if (award) {
+            statusMsg = award.summary;
+            statusTimer = award.levelsGained > 0 ? 2.8 : 2.0;
+          }
+        }
       }
 
       if (isBotOpponent() && player.hp <= 0) {
@@ -622,6 +827,9 @@ window.CBGame = (function () {
         player.hp = 0.01;
         player.invuln = true;
         invulnTimer = 99;
+        player.plunging = false;
+        player.vy = 0;
+        clearPlungeFx();
         clearFinisherSloMo();
         if (playerLives != null) {
           playerLives -= 1;
@@ -639,7 +847,7 @@ window.CBGame = (function () {
     if (respawnEvent) {
       respawnEvent.timer -= dt;
       if (respawnEvent.timer <= 0) {
-        const spawnY = (map && map.groundY != null ? map.groundY : H * 0.72) - 50;
+        const spawnY = (map && map.groundY != null ? map.groundY : H * 0.72) - 6;
         if (respawnEvent.kind === "matchWin") {
           respawnEvent = null;
           endMatch(true);
@@ -659,6 +867,8 @@ window.CBGame = (function () {
             hp: 100,
             maxHp: 100,
             flash: 0,
+            vy: 0,
+            grounded: true,
           };
         } else if (respawnEvent.kind === "enemy") {
           enemy = enemyApi().create();
@@ -667,6 +877,10 @@ window.CBGame = (function () {
           player.hp = player.maxHp;
           player.x = W * 0.22;
           player.y = spawnY;
+          player.vy = 0;
+          player.grounded = true;
+          player.plunging = false;
+          clearPlungeFx();
           invulnTimer = 1.6;
           player.invuln = true;
           statusMsg =
@@ -727,9 +941,13 @@ window.CBGame = (function () {
     const qReady = ultCharge >= ULT_MAX;
     const qLabel = qReady ? "Q Ult READY" : `Q Ult ${Math.floor(ultCharge)}%`;
     let atk = "LMB";
-    if (holdingAttack && holdTime >= HOLD_TAP_MAX) {
+    if (player && player.plunging) {
+      atk = "PLUNGE";
+    } else if (holdingAttack && holdTime >= HOLD_TAP_MAX) {
       const c = Math.min(1, (holdTime - HOLD_TAP_MAX) / (HOLD_FULL - HOLD_TAP_MAX));
       atk = `Charging ${Math.floor(c * 100)}%`;
+    } else if (player && !player.grounded) {
+      atk = "LMB Plunge";
     }
     const target = foe();
     const foeLabel = isBotOpponent()
@@ -911,6 +1129,26 @@ window.CBGame = (function () {
         }
         if (sil) ctx.filter = "brightness(0)";
         ctx.drawImage(fighterImg, -size / 2, -size / 2, size, size);
+        // Equipped hat (layout in unflipped space, then same facing)
+        if (
+          !sil &&
+          window.CBCosmetics &&
+          window.CBCountryballs &&
+          CBCountryballs.getHatId
+        ) {
+          const hatId = CBCountryballs.getHatId(player.id);
+          const hat = CBCosmetics.getHat(hatId);
+          const himg = hat && hat._img;
+          if (hat && himg && himg.complete && himg.naturalWidth) {
+            const aspect = himg.naturalWidth / himg.naturalHeight;
+            hat._aspect = aspect;
+            const w = player.radius * 2 * hat.scale;
+            const hh = w / aspect;
+            const hx = hat.ox * player.radius - w / 2;
+            const hy = hat.oy * player.radius - hh / 2;
+            ctx.drawImage(himg, hx, hy, w, hh);
+          }
+        }
         ctx.filter = "none";
         ctx.restore();
         if (player.flash > 0 && !sil) {

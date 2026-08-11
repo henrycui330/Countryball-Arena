@@ -19,21 +19,28 @@ html,
 body {
   margin: 0;
   height: 100%;
+  width: 100%;
+  overflow: hidden;
   background: #0e1624;
   color: var(--paper);
   font-family: "Outfit", "Trebuchet MS", sans-serif;
 }
 
 #app {
+  height: 100%;
+  width: 100%;
   min-height: 100%;
+  min-height: 100dvh;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
 }
 
 .screen {
-  width: min(960px, 100%);
+  width: 100%;
+  height: 100%;
+  max-width: none;
 }
 
 .screen-hidden {
@@ -43,13 +50,25 @@ body {
 /* —— Main menu stage (title + setup) —— */
 #screen-menu {
   position: relative;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
+
+#screen-auth {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .menu-stage {
   position: relative;
-  min-height: min(560px, 86vh);
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
   overflow: hidden;
-  border: 3px solid rgba(243, 240, 231, 0.28);
+  border: none;
   isolation: isolate;
 }
 
@@ -83,7 +102,8 @@ body {
 .menu-view {
   position: relative;
   z-index: 2;
-  min-height: min(560px, 86vh);
+  min-height: 100%;
+  min-height: 100dvh;
 }
 
 /* Title view */
@@ -158,6 +178,141 @@ body {
   background: #fff;
 }
 
+.title-nav-btn-roster {
+  background: #2b3a6b;
+  color: #fff;
+}
+
+.title-nav-btn-roster:hover,
+.title-nav-btn-roster:focus-visible {
+  background: #3c4f8a;
+}
+
+.title-nav-btn-gacha {
+  background: #c45c26;
+  color: #fff;
+}
+
+.title-nav-btn-gacha:hover,
+.title-nav-btn-gacha:focus-visible {
+  background: #d46a32;
+}
+
+.title-user {
+  margin: 0 0 1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: rgba(243, 240, 231, 0.9);
+}
+
+.title-user strong {
+  color: #f0c43a;
+}
+
+.title-logout {
+  appearance: none;
+  margin-left: 0.65rem;
+  border: 2px solid #142033;
+  background: rgba(255, 255, 255, 0.9);
+  color: #142033;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+}
+
+.title-logout:hover,
+.title-logout:focus-visible {
+  background: #f0c43a;
+  outline: none;
+}
+
+/* —— Auth screens —— */
+.auth-stage .auth-view {
+  max-width: 22rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  animation: title-rise 0.45s ease-out both;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.auth-label {
+  margin-top: 0.55rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f0c43a;
+  font-weight: 800;
+}
+
+.auth-input {
+  appearance: none;
+  border: 2px solid #142033;
+  background: rgba(255, 255, 255, 0.92);
+  color: #142033;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.65rem 0.75rem;
+}
+
+.auth-input:focus {
+  outline: 2px solid #f0c43a;
+  outline-offset: 1px;
+}
+
+.auth-error {
+  min-height: 1.25rem;
+  margin: 0.5rem 0 0.25rem;
+  color: #ff8a80;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.auth-form .menu-btn {
+  margin-top: 0.75rem;
+  width: 100%;
+  animation: none;
+}
+
+.auth-switch {
+  appearance: none;
+  margin-top: 1rem;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.9;
+  padding: 0;
+}
+
+.auth-switch:hover,
+.auth-switch:focus-visible {
+  color: #f0c43a;
+  outline: none;
+}
+
+.auth-switch-muted {
+  display: block;
+  margin-top: 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.65;
+  text-decoration: none;
+}
+
 .title-nav-btn:hover,
 .title-nav-btn:focus-visible {
   transform: translate(-2px, -2px);
@@ -177,6 +332,15 @@ body {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(243, 240, 231, 0.65);
+}
+
+.menu-version {
+  margin: 0.45rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f0c43a;
 }
 
 .title-hero {
@@ -289,6 +453,20 @@ body {
   box-shadow: 3px 3px 0 #142033;
 }
 
+.mode-btn.is-locked,
+.mode-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #9aa3b5;
+  box-shadow: none;
+}
+
+.mode-btn.is-locked:hover,
+.mode-btn:disabled:hover {
+  background: #9aa3b5;
+  transform: none;
+}
+
 .mode-desc {
   margin: 0.45rem 0 0;
   font-size: 0.85rem;
@@ -354,6 +532,256 @@ body {
   color: #c41e3a;
 }
 
+/* —— Countryballs stats viewer —— */
+.menu-view-countryballs {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(1.25rem, 3.5vw, 2.25rem);
+  animation: title-rise 0.45s ease-out both;
+}
+
+.cb-layout {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) 1fr;
+  gap: 1.25rem;
+  align-items: start;
+  max-width: 44rem;
+}
+
+.cb-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cb-roster-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  border: 2px solid #142033;
+  background: rgba(255, 255, 255, 0.88);
+  color: #142033;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cb-roster-item:hover,
+.cb-roster-item:focus-visible {
+  background: #fff;
+  outline: none;
+}
+
+.cb-roster-item.is-selected {
+  background: #f0c43a;
+  box-shadow: 3px 3px 0 #142033;
+}
+
+.cb-roster-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.cb-roster-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.cb-roster-name {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.cb-roster-lv {
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.cb-detail {
+  background: rgba(14, 22, 36, 0.45);
+  border: 2px solid rgba(243, 240, 231, 0.22);
+  padding: 1rem 1.15rem 1.15rem;
+}
+
+.cb-portrait-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  min-height: 180px;
+}
+
+.cb-portrait {
+  width: min(160px, 36vw);
+  height: auto;
+  filter: drop-shadow(0 8px 0 rgba(20, 32, 51, 0.35));
+  position: relative;
+  z-index: 1;
+}
+
+.cb-hat {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 0 rgba(20, 32, 51, 0.3));
+  max-width: none;
+}
+
+.cb-hats-block {
+  margin-top: 0.85rem;
+}
+
+.cb-hat-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.cb-hat-btn {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  width: 4.6rem;
+  border: 2px solid #142033;
+  background: rgba(255, 255, 255, 0.88);
+  color: #142033;
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.35rem 0.25rem;
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.15;
+}
+
+.cb-hat-btn img {
+  width: 40px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.cb-hat-btn:hover,
+.cb-hat-btn:focus-visible {
+  background: #fff;
+  outline: none;
+}
+
+.cb-hat-btn.is-selected {
+  background: #f0c43a;
+  box-shadow: 3px 3px 0 #142033;
+}
+
+.cb-hat-btn.is-locked,
+.cb-hat-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+.cb-hat-btn.is-locked:hover,
+.cb-hat-btn:disabled:hover {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.cb-name {
+  margin: 0;
+  font-family: "Archivo Black", Impact, sans-serif;
+  font-size: 1.75rem;
+  color: #fff;
+  text-align: center;
+}
+
+.cb-level {
+  margin: 0.2rem 0 0.75rem;
+  text-align: center;
+  font-weight: 800;
+  color: #f0c43a;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+.cb-xp {
+  margin-bottom: 0.9rem;
+}
+
+.cb-xp-track {
+  height: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+
+.cb-xp-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #c41e3a, #f0c43a);
+  transition: width 0.2s ease;
+}
+
+.cb-xp-label {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: rgba(243, 240, 231, 0.75);
+  text-align: right;
+}
+
+.cb-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem 1rem;
+  margin: 0 0 0.85rem;
+}
+
+.cb-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.cb-stats dt {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f0c43a;
+  font-weight: 800;
+}
+
+.cb-stats dd {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.cb-blurb {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  color: rgba(243, 240, 231, 0.85);
+  line-height: 1.35;
+}
+
+.cb-cosmetics-note {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(243, 240, 231, 0.5);
+}
+
 .menu-btn {
   appearance: none;
   border: 3px solid #142033;
@@ -408,60 +836,130 @@ body {
 
 #screen-result {
   position: relative;
-  min-height: min(540px, 80vh);
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid rgba(243, 240, 231, 0.28);
+  border: none;
   background:
     linear-gradient(180deg, #5ec8f0 0%, #9ed8ef 50%, #3a9b4a 50%, #2a6b38 100%);
 }
 
 #screen-win {
   position: relative;
-  width: min(960px, 100%);
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.65rem;
+  background: #0e1624;
 }
 
 #win-canvas {
   display: block;
-  width: 100%;
+  width: min(100%, 100vw);
   height: auto;
-  border: 3px solid rgba(243, 240, 231, 0.4);
+  max-height: calc(100dvh - 5rem);
+  object-fit: contain;
+  border: none;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
 
 .win-hud {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
   justify-content: center;
+}
+
+.win-reward {
+  margin: 0;
+  max-width: 36rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: rgba(243, 240, 231, 0.92);
+  text-shadow: 0 1px 0 #142033;
+  min-height: 1.25rem;
+}
+
+.win-reward.is-levelup {
+  color: #f0c43a;
+  font-size: 1.05rem;
+}
+
+.cb-coin-bank {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.15rem 0.55rem;
+  background: rgba(240, 196, 58, 0.2);
+  border: 1px solid rgba(240, 196, 58, 0.55);
+  color: #f0c43a;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+.cb-coin-bank strong {
+  color: #fff;
 }
 
 /* —— Game —— */
 #screen-game {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  gap: 0;
+  background: #000;
+  overflow: hidden;
 }
 
 #game-canvas {
   display: block;
+  flex: 1 1 auto;
   width: 100%;
-  height: auto;
-  border: 3px solid rgba(243, 240, 231, 0.4);
-  background: #0f3460;
+  height: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center center;
+  border: none;
+  background: #000;
+  image-rendering: auto;
 }
 
 #hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  padding: 0.75rem 1rem;
   font-size: 0.9rem;
-  opacity: 0.9;
+  opacity: 0.95;
+  background: linear-gradient(
+    180deg,
+    rgba(14, 22, 36, 0.75) 0%,
+    rgba(14, 22, 36, 0) 100%
+  );
+  pointer-events: none;
+}
+
+#hud .hud-btn {
+  pointer-events: auto;
 }
 
 .hud-btn {
@@ -559,4 +1057,375 @@ body {
     margin-left: auto;
     margin-right: auto;
   }
+
+  .cb-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cb-roster {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .cb-roster-item {
+    flex: 1 1 8rem;
+  }
 }
+
+/* —— Gacha —— */
+#screen-gacha {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 1.25rem;
+  overflow-y: auto;
+  background:
+    radial-gradient(ellipse at 15% 0%, rgba(240, 196, 58, 0.22), transparent 42%),
+    radial-gradient(ellipse at 90% 100%, rgba(196, 92, 38, 0.3), transparent 48%),
+    linear-gradient(165deg, #152238 0%, #0b1220 48%, #1a2816 100%);
+}
+
+#screen-gacha.screen-hidden {
+  display: none;
+}
+
+.gacha-layout {
+  width: min(980px, 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.gacha-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+}
+
+.gacha-title {
+  margin: 0;
+  font-family: "Archivo Black", Impact, sans-serif;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  color: #f0c43a;
+  letter-spacing: 0.04em;
+  flex: 1;
+}
+
+.gacha-coins-line {
+  margin: 0;
+  font-weight: 700;
+  color: #f3f0e7;
+  font-size: 1.05rem;
+}
+
+.gacha-coins-line strong {
+  color: #f0c43a;
+  font-size: 1.25rem;
+}
+
+.gacha-sub {
+  margin: 0;
+  color: rgba(243, 240, 231, 0.85);
+  font-size: 0.95rem;
+  max-width: 36rem;
+}
+
+.gacha-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.gacha-pull-btn {
+  min-width: 10rem;
+}
+
+.gacha-reveal-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.gacha-hint {
+  margin: 0;
+  flex: 1;
+  color: rgba(243, 240, 231, 0.9);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.gacha-flip-all-btn {
+  padding: 0.55rem 1rem;
+  font-size: 0.95rem;
+}
+
+.gacha-results {
+  min-height: 14rem;
+  padding: 1.1rem;
+  border: 3px solid #142033;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%),
+    rgba(12, 18, 30, 0.72);
+  color: #f3f0e7;
+  box-shadow: inset 0 0 0 1px rgba(240, 196, 58, 0.12);
+}
+
+.gacha-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  min-height: 12rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+.gacha-idle-ball {
+  width: min(120px, 34vw);
+  height: auto;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
+  animation: gacha-idle-bob 2.4s ease-in-out infinite;
+}
+
+.gacha-msg {
+  margin: 0 0 0.9rem;
+  font-weight: 600;
+}
+
+.gacha-idle .gacha-msg {
+  margin: 0;
+  max-width: 22rem;
+  color: rgba(243, 240, 231, 0.88);
+}
+
+.gacha-msg-err {
+  color: #ff8f7a;
+}
+
+.gacha-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.2rem, 1fr));
+  gap: 0.95rem 0.8rem;
+}
+
+/* Flip cards — slot sizes the card; inner does 3D (don't transform the slot) */
+.gacha-flip {
+  position: relative;
+  width: 100%;
+  /* explicit height so absolute faces never collapse */
+  height: 0;
+  padding-bottom: 138%;
+  cursor: pointer;
+  outline: none;
+  perspective: 1000px;
+  -webkit-perspective: 1000px;
+  animation: gacha-deal 0.5s ease-out both;
+  animation-delay: calc(var(--deal-i, 0) * 55ms);
+}
+
+.gacha-flip:focus-visible {
+  outline: 3px solid #f0c43a;
+  outline-offset: 4px;
+}
+
+.gacha-flip-inner {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(0.4, 0.05, 0.2, 1);
+  border-radius: 0.55rem;
+}
+
+.gacha-flip.is-flipped .gacha-flip-inner {
+  transform: rotateY(180deg);
+}
+
+.gacha-flip-face {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  padding: 0.55rem 0.4rem 0.65rem;
+  border-radius: 0.55rem;
+  border: 3px solid #142033;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: 4px 5px 0 #0a101c;
+  overflow: hidden;
+}
+
+.gacha-flip-back {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.2), transparent 55%),
+    linear-gradient(160deg, #3a4d72 0%, #1a2740 100%);
+  z-index: 2;
+  transform: rotateY(0deg);
+}
+
+.gacha-back-art {
+  width: 78%;
+  max-height: 62%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+  pointer-events: none;
+  user-select: none;
+}
+
+.gacha-back-mark {
+  font-family: "Archivo Black", Impact, sans-serif;
+  font-size: 1.45rem;
+  color: #f0c43a;
+  letter-spacing: 0.04em;
+  text-shadow: 2px 2px 0 #142033;
+  line-height: 1;
+}
+
+.gacha-flip-front {
+  background: #f4efe4;
+  color: #142033;
+  text-align: center;
+  z-index: 1;
+  transform: rotateY(180deg);
+}
+
+.gacha-front-cosmetic {
+  background: linear-gradient(180deg, #eef2fb 0%, #d9e0f2 100%);
+}
+
+.gacha-front-character {
+  background: linear-gradient(180deg, #fff0e3 0%, #f0c9a4 100%);
+}
+
+.gacha-front-weapon {
+  background: linear-gradient(180deg, #e7f6f1 0%, #b9dfd3 100%);
+}
+
+.gacha-reveal-art {
+  width: 72%;
+  max-height: 48%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin-bottom: 0.1rem;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 3px 4px rgba(20, 32, 51, 0.25));
+}
+
+.gacha-reveal-fallback {
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #142033;
+  color: #f0c43a;
+  font-family: "Archivo Black", Impact, sans-serif;
+  font-size: 1.4rem;
+  margin-bottom: 0.2rem;
+}
+
+.gacha-card-type {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.72;
+  line-height: 1.1;
+}
+
+.gacha-card-name {
+  margin: 0;
+  font-weight: 800;
+  font-size: 0.82rem;
+  line-height: 1.15;
+  max-width: 100%;
+}
+
+.gacha-new {
+  display: inline-block;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #1f6b5a;
+}
+
+.gacha-dup {
+  display: inline-block;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #7a5a12;
+}
+
+.gacha-flip.is-flipped .gacha-flip-front {
+  animation: gacha-reveal-pop 0.35s ease-out 0.28s both;
+}
+
+@keyframes gacha-deal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes gacha-idle-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+@keyframes gacha-reveal-pop {
+  from {
+    filter: brightness(1.2);
+  }
+  to {
+    filter: brightness(1);
+  }
+}
+
+@media (max-width: 720px) {
+  .gacha-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .gacha-actions {
+    width: 100%;
+  }
+
+  .gacha-pull-btn {
+    flex: 1 1 auto;
+  }
+
+  .gacha-grid {
+    grid-template-columns: repeat(auto-fill, minmax(6.8rem, 1fr));
+    gap: 0.7rem 0.55rem;
+  }
+}
+
