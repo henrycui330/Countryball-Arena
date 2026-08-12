@@ -26,6 +26,38 @@ window.CBRussiaAbilities = (function () {
   byImg = load("assets/belarus.png", "Belarus");
   uaImg = load("assets/ukraine.png", "Ukraine");
 
+  function absolutFor(player) {
+    const ballId = (player && player.id) || "russia";
+    if (window.CBCosmetics && CBCosmetics.getEquippedWeaponImage) {
+      const skin = CBCosmetics.getEquippedWeaponImage(ballId);
+      if (skin) return skin;
+    }
+    return absolutImg;
+  }
+
+  function wrathOn(player) {
+    return !!(
+      window.CBCountryballs &&
+      CBCountryballs.hasWrath &&
+      CBCountryballs.hasWrath((player && player.id) || "russia")
+    );
+  }
+
+  function auraId(player) {
+    if (!window.CBCountryballs || !CBCountryballs.getEffectId) return null;
+    return CBCountryballs.getEffectId((player && player.id) || "russia");
+  }
+
+  function auraPalette(player, fallback) {
+    const id = auraId(player);
+    if (!id || id === "none" || !window.CBCosmetics || !CBCosmetics.getEffect) {
+      return fallback.slice();
+    }
+    const fx = CBCosmetics.getEffect(id);
+    if (!fx || !Array.isArray(fx.colors) || !fx.colors.length) return fallback.slice();
+    return fx.colors.slice();
+  }
+
   const BOTTLE = {
     w: 42,
     h: 72,
@@ -94,9 +126,10 @@ window.CBRussiaAbilities = (function () {
     const dmg = defs.freedomBlast.damage;
     const finisher = willKo(dmg, options.foeHp);
     const a = aimVec(player);
+    const cols = auraPalette(player, COLORS);
     window.CBEffects.spawnDeagleBash({
       follow: player,
-      img: absolutImg,
+      img: absolutFor(player),
       w: BOTTLE.w,
       h: BOTTLE.h,
       pivotX: BOTTLE.pivotX,
@@ -115,11 +148,18 @@ window.CBRussiaAbilities = (function () {
       swingFrom: -1.2,
       swingTo: 0.55,
       finisher,
+      wrath: wrathOn(player),
     });
     window.CBEffects.spawnParticle(
       player.x + a.x * player.radius,
       player.y + a.y * player.radius,
-      { vx: a.x * 50, vy: a.y * 50, life: 0.12, size: 3, color: "#0039a6" }
+      {
+        vx: a.x * 50,
+        vy: a.y * 50,
+        life: 0.12,
+        size: 3,
+        color: cols[0] || "#0039a6",
+      }
     );
     console.log("[Russia] Absolut Bash" + (finisher ? " FINISHER" : ""));
     return { ok: true, finisher };
@@ -143,7 +183,7 @@ window.CBRussiaAbilities = (function () {
     window.CBEffects.spawnVodkaBarrage({
       follow: player,
       target: target,
-      img: absolutImg,
+      img: absolutFor(player),
       w: BOTTLE.w,
       h: BOTTLE.h,
       pivotX: BOTTLE.pivotX,
@@ -156,6 +196,7 @@ window.CBRussiaAbilities = (function () {
       handDist: BOTTLE.handDist,
       duration: duration,
       finisher,
+      wrath: wrathOn(player),
     });
     console.log(
       "[Russia] Barrage hits=" + hits + " dmg/hit=" + perHit + (finisher ? " FINISHER" : "")
@@ -171,15 +212,16 @@ window.CBRussiaAbilities = (function () {
     player.hp = Math.min(maxHp, player.hp + heal);
     const gained = player.hp - before;
 
-    window.CBEffects.spawnBurst(player.x, player.y - player.radius * 0.4, 14, [
-      "#0039a6",
-      "#ffffff",
-      "#d52b1e",
-    ]);
+    window.CBEffects.spawnBurst(
+      player.x,
+      player.y - player.radius * 0.4,
+      14,
+      auraPalette(player, ["#0039a6", "#ffffff", "#d52b1e"])
+    );
     // Tip-up drink pose
     window.CBEffects.spawnDrinkPose({
       follow: player,
-      img: absolutImg,
+      img: absolutFor(player),
       w: BOTTLE.w,
       h: BOTTLE.h,
       pivotX: BOTTLE.pivotX,
@@ -210,13 +252,14 @@ window.CBRussiaAbilities = (function () {
       owner: player,
       target: target,
       life: defs.starsBarrage.allyLife,
+      wrath: wrathOn(player),
       allies: [
         { id: "ally-kz", name: "Kazakhstan", img: kzImg },
         { id: "ally-by", name: "Belarus", img: byImg },
         { id: "ally-ua", name: "Ukraine", img: uaImg },
       ],
     });
-    window.CBEffects.spawnBurst(player.x, player.y, 16, COLORS);
+    window.CBEffects.spawnBurst(player.x, player.y, 16, auraPalette(player, COLORS));
     console.log("[Russia] Brotherhood summon ×3");
     return { ok: true, finisher: false };
   }
@@ -265,6 +308,7 @@ window.CBRussiaAbilities = (function () {
   function tickChargeHold(player, charge01) {
     const t = Math.max(0, Math.min(1, charge01));
     if (Math.random() > 0.5) return;
+    const cols = auraPalette(player, COLORS);
     const a = aimVec(player);
     window.CBEffects.spawnParticle(
       player.x + a.x * player.radius * 0.5,
@@ -274,14 +318,14 @@ window.CBRussiaAbilities = (function () {
         vy: (Math.random() - 0.5) * 40 - 20,
         life: 0.2,
         size: 2 + t * 2,
-        color: COLORS[Math.floor(Math.random() * 3)],
+        color: cols[Math.floor(Math.random() * cols.length)],
       }
     );
   }
 
-  function getMeleeWeapon() {
+  function getMeleeWeapon(player) {
     return {
-      img: absolutImg,
+      img: absolutFor(player),
       w: BOTTLE.w,
       h: BOTTLE.h,
       pivotX: BOTTLE.pivotX,

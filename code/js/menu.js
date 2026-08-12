@@ -40,12 +40,18 @@ window.CBMenu = (function () {
     if (gacha) gacha.classList.add("screen-hidden");
   }
 
+  function hideCountryballsScreen() {
+    const balls = document.getElementById("screen-countryballs");
+    if (balls) balls.classList.add("screen-hidden");
+  }
+
   function show() {
     const menu = document.getElementById("screen-menu");
     const game = document.getElementById("screen-game");
     const result = document.getElementById("screen-result");
     const win = document.getElementById("screen-win");
     hideGachaScreen();
+    hideCountryballsScreen();
     if (menu) menu.classList.remove("screen-hidden");
     if (game) game.classList.add("screen-hidden");
     if (result) result.classList.add("screen-hidden");
@@ -58,20 +64,20 @@ window.CBMenu = (function () {
     const menu = document.getElementById("screen-menu");
     if (menu) menu.classList.add("screen-hidden");
     hideGachaScreen();
+    hideCountryballsScreen();
   }
 
   function hideAllViews() {
     const title = document.getElementById("view-title");
     const setup = document.getElementById("view-setup");
-    const balls = document.getElementById("view-countryballs");
     if (title) title.classList.add("screen-hidden");
     if (setup) setup.classList.add("screen-hidden");
-    if (balls) balls.classList.add("screen-hidden");
   }
 
   function showTitle() {
     state.view = "title";
     hideGachaScreen();
+    hideCountryballsScreen();
     hideAllViews();
     const menu = document.getElementById("screen-menu");
     if (menu) menu.classList.remove("screen-hidden");
@@ -85,6 +91,7 @@ window.CBMenu = (function () {
     }
     state.view = "setup";
     hideGachaScreen();
+    hideCountryballsScreen();
     hideAllViews();
     const menu = document.getElementById("screen-menu");
     if (menu) menu.classList.remove("screen-hidden");
@@ -104,15 +111,16 @@ window.CBMenu = (function () {
     hideGachaScreen();
     hideAllViews();
     const menu = document.getElementById("screen-menu");
-    if (menu) menu.classList.remove("screen-hidden");
-    const balls = document.getElementById("view-countryballs");
+    if (menu) menu.classList.add("screen-hidden");
+    const balls = document.getElementById("screen-countryballs");
     if (balls) balls.classList.remove("screen-hidden");
     if (window.CBCountryballsUI) CBCountryballsUI.show();
-    console.log("[CBMenu] countryballs view");
+    console.log("[CBMenu] countryballs screen");
   }
 
   function showGacha() {
     state.view = "gacha";
+    hideCountryballsScreen();
     hideAllViews();
     const menu = document.getElementById("screen-menu");
     if (menu) menu.classList.add("screen-hidden");

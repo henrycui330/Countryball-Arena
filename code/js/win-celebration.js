@@ -121,6 +121,24 @@ window.CBWinCelebration = (function () {
         (window.CBRussiaAbilities && window.CBRussiaAbilities.absolutPath) ||
         "assets/absolut.png";
     }
+    // Prefer equipped skin for win flourish
+    if (window.CBCosmetics && CBCosmetics.getEquippedWeaponPath) {
+      const usaPath = CBCosmetics.getEquippedWeaponPath("usa");
+      if (usaPath) {
+        deagleImg = new Image();
+        deagleImg.src = usaPath;
+      }
+      const jpPath = CBCosmetics.getEquippedWeaponPath("japan");
+      if (jpPath) {
+        katanaImg = new Image();
+        katanaImg.src = jpPath;
+      }
+      const ruPath = CBCosmetics.getEquippedWeaponPath("russia");
+      if (ruPath) {
+        absolutImg = new Image();
+        absolutImg.src = ruPath;
+      }
+    }
   }
 
   function start(opts) {

@@ -22,6 +22,40 @@ window.CBUsaAbilities = (function () {
     deagleImg.src = "assets/deagle.png";
   }
 
+  /** Player-equipped skin if any, else starter deagle. */
+  function deagleFor(player) {
+    ensureDeagleLoaded();
+    const ballId = (player && player.id) || "usa";
+    if (window.CBCosmetics && CBCosmetics.getEquippedWeaponImage) {
+      const skin = CBCosmetics.getEquippedWeaponImage(ballId);
+      if (skin) return skin;
+    }
+    return deagleImg;
+  }
+
+  function wrathOn(player) {
+    return !!(
+      window.CBCountryballs &&
+      CBCountryballs.hasWrath &&
+      CBCountryballs.hasWrath((player && player.id) || "usa")
+    );
+  }
+
+  function auraId(player) {
+    if (!window.CBCountryballs || !CBCountryballs.getEffectId) return null;
+    return CBCountryballs.getEffectId((player && player.id) || "usa");
+  }
+
+  function auraPalette(player, fallback) {
+    const id = auraId(player);
+    if (!id || id === "none" || !window.CBCosmetics || !CBCosmetics.getEffect) {
+      return fallback.slice();
+    }
+    const fx = CBCosmetics.getEffect(id);
+    if (!fx || !Array.isArray(fx.colors) || !fx.colors.length) return fallback.slice();
+    return fx.colors.slice();
+  }
+
   function ensureEagleLoaded() {
     if (eagleImg) return;
     eagleImg = new Image();
@@ -105,9 +139,10 @@ window.CBUsaAbilities = (function () {
     const dmg = defs.freedomBlast.damage;
     const finisher = willKo(dmg, options.foeHp);
     const a = aimVec(player);
+    const burstCols = auraPalette(player, ["#ffffff", "#f7d354", "#b22234"]);
     window.CBEffects.spawnDeagleBash({
       follow: player,
-      img: deagleImg,
+      img: deagleFor(player),
       w: 68,
       h: 37,
       aimX: player.aimX,
@@ -122,11 +157,18 @@ window.CBUsaAbilities = (function () {
       swingFrom: -1.4,
       swingTo: 0.35,
       finisher,
+      wrath: wrathOn(player),
     });
     window.CBEffects.spawnParticle(
       player.x + a.x * player.radius,
       player.y + a.y * player.radius,
-      { vx: a.x * 60, vy: a.y * 60, life: 0.15, size: 4, color: "#ffffff" }
+      {
+        vx: a.x * 60,
+        vy: a.y * 60,
+        life: 0.15,
+        size: 4,
+        color: burstCols[0] || "#ffffff",
+      }
     );
     console.log("[USA] Deagle Bash" + (finisher ? " FINISHER" : ""));
     return { ok: true, finisher };
@@ -143,13 +185,15 @@ window.CBUsaAbilities = (function () {
     const spinLife = 0.45 + t * 0.12;
     const spinRate = (3 * Math.PI * 2) / spinLife;
     const speed = 720 + 260 * t;
-
+    const aura = auraId(player);
+    const wrath = aura === "wrath_of_the_gods";
+    const cols = auraPalette(player, COLORS);
     window.CBEffects.spawnDeagleSpin({
       follow: player,
       spin: spinRate,
       spinLife,
       holdLife: 0.3,
-      img: deagleImg,
+      img: deagleFor(player),
       w: 68,
       h: 37,
       aimX: player.aimX,
@@ -161,6 +205,8 @@ window.CBUsaAbilities = (function () {
       charge: t,
       handDist: 0.55,
       finisher,
+      wrath: wrath,
+      bulletColors: cols,
     });
     console.log(
       "[USA] Deagle spin dmg~" + roundDmg + (finisher ? " FINISHER" : "")
@@ -178,11 +224,11 @@ window.CBUsaAbilities = (function () {
     const muzzleX = player.x + a.x * (player.radius + 6);
     const muzzleY = player.y + a.y * (player.radius + 6);
 
-    window.CBEffects.spawnBurst(muzzleX, muzzleY, 10, [
+    window.CBEffects.spawnBurst(muzzleX, muzzleY, 10, auraPalette(player, [
       "#2e7d32",
       "#f7d354",
       "#ffffff",
-    ]);
+    ]));
 
     for (let i = 0; i < count; i++) {
       const spread = (i - (count - 1) / 2) * 0.2;
@@ -219,6 +265,7 @@ window.CBUsaAbilities = (function () {
     const dropEvery = life / (drops + 1);
     // One star must KO — don't use drops×damage (that made every ult a "finisher")
     const finisher = willKo(defs.starsBarrage.starDamage, options.foeHp);
+    const cols = auraPalette(player, ["#f7d354", "#ffffff", "#3c3b6e"]);
 
     window.CBEffects.spawnEagleFlyby({
       x: startX,
@@ -246,7 +293,7 @@ window.CBUsaAbilities = (function () {
         vy: 60 + Math.random() * 40,
         life: 0.6,
         size: 3,
-        color: "#f7d354",
+        color: cols[i % cols.length],
       });
     }
     console.log("[USA] Ultimate eagle" + (finisher ? " FINISHER" : ""));
@@ -294,23 +341,25 @@ window.CBUsaAbilities = (function () {
 
   function tickEagleTrail(player) {
     if (Math.random() > 0.45) return;
+    const cols = auraPalette(player, COLORS);
     window.CBEffects.spawnTrail(player.x, player.y, {
       life: 0.3,
       size: player.radius * 0.9,
-      color: Math.random() > 0.5 ? "rgba(178,34,52,0.4)" : "rgba(60,59,110,0.4)",
+      color: Math.random() > 0.5 ? cols[0] : cols[2] || cols[0],
     });
     window.CBEffects.spawnParticle(player.x, player.y, {
       vx: (Math.random() - 0.5) * 40,
       vy: (Math.random() - 0.5) * 40,
       life: 0.25,
       size: 3,
-      color: "#ffffff",
+      color: cols[1] || "#ffffff",
     });
   }
 
   function tickChargeHold(player, charge01) {
     const t = Math.max(0, Math.min(1, charge01));
     if (Math.random() > 0.5) return;
+    const cols = auraPalette(player, COLORS);
     const a = aimVec(player);
     window.CBEffects.spawnParticle(
       player.x + a.x * player.radius * 0.6,
@@ -320,14 +369,14 @@ window.CBUsaAbilities = (function () {
         vy: (Math.random() - 0.5) * 50 - 30,
         life: 0.25,
         size: 2 + t * 3,
-        color: t > 0.7 ? "#f7d354" : COLORS[Math.floor(Math.random() * 3)],
+        color: t > 0.7 ? cols[0] : cols[Math.floor(Math.random() * cols.length)],
       }
     );
   }
 
-  function getMeleeWeapon() {
+  function getMeleeWeapon(player) {
     return {
-      img: deagleImg,
+      img: deagleFor(player),
       w: 68,
       h: 37,
       pivotX: 68 * 0.34,

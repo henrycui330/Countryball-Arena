@@ -100,7 +100,25 @@
               <button type="button" class="title-nav-btn title-nav-btn-gacha" id="nav-gacha">
                 Gacha
               </button>
+              <button type="button" class="title-nav-btn title-nav-btn-multi" id="nav-multiplayer">
+                Multiplayer
+              </button>
             </nav>
+            <section id="mp-panel" class="mp-panel screen-hidden" aria-label="Multiplayer">
+              <p class="mp-title">Multiplayer</p>
+              <p class="mp-sub">Host room -> share 5-digit code -> friends join.</p>
+              <p id="mp-status" class="mp-status">Connecting…</p>
+              <div class="mp-row">
+                <button type="button" id="mp-host" class="menu-btn mp-btn">Host Room</button>
+                <input id="mp-code" class="mp-input mp-code" type="text" maxlength="5" placeholder="12345" />
+                <button type="button" id="mp-join" class="menu-btn mp-btn mp-btn-alt">Join</button>
+              </div>
+              <div class="mp-row">
+                <button type="button" id="mp-ready" class="menu-btn mp-btn">Ready</button>
+                <button type="button" id="mp-leave" class="menu-btn mp-btn mp-btn-alt">Leave Room</button>
+              </div>
+              <p id="mp-room" class="mp-room">Room: —</p>
+            </section>
             <p class="menu-foot">USA · Japan · Russia · WASD · LMB · E · Q</p>
             <p class="menu-version" id="game-version">Version 1.2</p>
           </div>
@@ -178,45 +196,59 @@
             <button type="button" id="btn-play" class="menu-btn">Fight!</button>
           </div>
         </div>
+      </div>
+    </section>
 
-        <!-- COUNTRYBALLS (stats viewer) -->
-        <div id="view-countryballs" class="menu-view menu-view-countryballs screen-hidden">
-          <button type="button" class="setup-back" id="btn-back-countryballs">← Back</button>
-          <h2 class="setup-heading">Countryballs</h2>
-          <p class="setup-lead">
-            Your roster — fight to earn XP. Level-ups grant coin rewards.
-            <span class="cb-coin-bank">Coins: <strong id="cb-coins">0</strong></span>
-          </p>
-          <button type="button" id="btn-import-local" class="auth-switch auth-switch-muted cb-import-btn">
-            Import old browser progress into this account
-          </button>
+    <section id="screen-countryballs" class="screen screen-hidden" aria-label="Countryballs">
+      <div class="cb-page">
+        <header class="cb-page-top">
+          <button type="button" id="btn-back-countryballs" class="cb-back">← Title</button>
+          <h1 class="cb-page-title">Countryballs</h1>
+          <p class="cb-coin-bank">Coins: <strong id="cb-coins">0</strong></p>
+        </header>
+        <p class="cb-page-lead">
+          Your roster — fight to earn XP. Level-ups grant coin rewards.
+        </p>
+        <button type="button" id="btn-import-local" class="auth-switch auth-switch-muted cb-import-btn">
+          Import old browser progress into this account
+        </button>
 
-          <div class="cb-layout">
+        <div class="cb-layout">
+          <aside class="cb-roster-wrap">
+            <p class="mode-label">Roster</p>
             <div class="cb-roster" id="cb-roster" role="list" aria-label="Owned countryballs"></div>
-            <div class="cb-detail" id="cb-detail" aria-live="polite">
-              <div class="cb-portrait-wrap">
-                <img id="cb-portrait" class="cb-portrait" src="assets/usa.png" alt="" width="180" height="180" />
-                <img id="cb-hat" class="cb-hat screen-hidden" src="" alt="" />
+          </aside>
+          <div class="cb-detail" id="cb-detail" aria-live="polite">
+            <div class="cb-portrait-wrap">
+              <img id="cb-portrait" class="cb-portrait" src="assets/usa.png" alt="" width="180" height="180" />
+              <img id="cb-hat" class="cb-hat screen-hidden" src="" alt="" />
+            </div>
+            <h3 id="cb-name" class="cb-name">USA</h3>
+            <p id="cb-level" class="cb-level">Level 1</p>
+            <div class="cb-xp" aria-label="Experience">
+              <div class="cb-xp-track">
+                <div id="cb-xp-fill" class="cb-xp-fill" style="width:0%"></div>
               </div>
-              <h3 id="cb-name" class="cb-name">USA</h3>
-              <p id="cb-level" class="cb-level">Level 1</p>
-              <div class="cb-xp" aria-label="Experience">
-                <div class="cb-xp-track">
-                  <div id="cb-xp-fill" class="cb-xp-fill" style="width:0%"></div>
-                </div>
-                <p id="cb-xp-label" class="cb-xp-label">0 / 65 XP</p>
-              </div>
-              <dl class="cb-stats">
-                <div><dt>HP</dt><dd id="cb-stat-hp">100</dd></div>
-                <div><dt>Atk</dt><dd id="cb-stat-atk">16</dd></div>
-                <div><dt>Special</dt><dd id="cb-stat-special">Cash Toss</dd></div>
-                <div><dt>Ultimate</dt><dd id="cb-stat-ult">Eagle Strike</dd></div>
-              </dl>
-              <p id="cb-blurb" class="cb-blurb">Deagle bash · charged spin-shot · cash toss · eagle ult</p>
-              <div class="cb-hats-block">
-                <p class="mode-label">Hat</p>
-                <div id="cb-hat-pick" class="cb-hat-pick" role="group" aria-label="Hat"></div>
-              </div>
+              <p id="cb-xp-label" class="cb-xp-label">0 / 65 XP</p>
+            </div>
+            <dl class="cb-stats">
+              <div><dt>HP</dt><dd id="cb-stat-hp">100</dd></div>
+              <div><dt>Atk</dt><dd id="cb-stat-atk">16</dd></div>
+              <div><dt>Special</dt><dd id="cb-stat-special">Cash Toss</dd></div>
+              <div><dt>Ultimate</dt><dd id="cb-stat-ult">Eagle Strike</dd></div>
+            </dl>
+            <p id="cb-blurb" class="cb-blurb">Deagle bash · charged spin-shot · cash toss · eagle ult</p>
+            <div class="cb-hats-block">
+              <p class="mode-label">Hat</p>
+              <div id="cb-hat-pick" class="cb-hat-pick" role="group" aria-label="Hat"></div>
+            </div>
+            <div class="cb-hats-block cb-weapons-block">
+              <p class="mode-label">Weapon</p>
+              <div id="cb-weapon-pick" class="cb-hat-pick" role="group" aria-label="Weapon"></div>
+            </div>
+            <div class="cb-hats-block cb-aura-block">
+              <p class="mode-label">Aura</p>
+              <div id="cb-aura-pick" class="cb-hat-pick" role="group" aria-label="Aura"></div>
             </div>
           </div>
         </div>
@@ -287,6 +319,9 @@
   <script src="js/gacha-ui.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/auth-ui.js"></script>
+  <script src="js/net/protocol.js"></script>
+  <script src="js/net/client.js"></script>
+  <script src="js/multiplayer-ui.js"></script>
   <script src="js/countryballs-ui.js"></script>
   <script src="js/menu.js"></script>
   <script src="js/game.js"></script>

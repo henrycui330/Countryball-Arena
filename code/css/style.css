@@ -198,6 +198,94 @@ body {
   background: #d46a32;
 }
 
+.title-nav-btn-multi {
+  background: #1f6b5a;
+  color: #fff;
+}
+
+.title-nav-btn-multi:hover,
+.title-nav-btn-multi:focus-visible {
+  background: #2a7f6d;
+}
+
+.mp-panel {
+  margin-top: 1rem;
+  max-width: 24rem;
+  padding: 0.9rem;
+  border: 2px solid #142033;
+  background: rgba(14, 22, 36, 0.7);
+}
+
+.mp-title {
+  margin: 0 0 0.35rem;
+  font-weight: 800;
+  color: #f0c43a;
+}
+
+.mp-sub {
+  margin: 0 0 0.45rem;
+  font-size: 0.8rem;
+  color: rgba(243, 240, 231, 0.82);
+}
+
+.mp-status {
+  margin: 0 0 0.55rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: rgba(243, 240, 231, 0.85);
+}
+
+.mp-status.is-ok {
+  color: #8fe3b3;
+}
+
+.mp-status.is-bad {
+  color: #ff9a8f;
+}
+
+.mp-input {
+  width: 100%;
+  appearance: none;
+  border: 2px solid #142033;
+  background: rgba(255, 255, 255, 0.9);
+  color: #142033;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 0.45rem 0.55rem;
+}
+
+.mp-row {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.mp-code {
+  width: 6.2rem;
+  letter-spacing: 0.15em;
+  text-align: center;
+}
+
+.mp-btn {
+  font-size: 0.85rem;
+  padding: 0.45rem 0.7rem;
+  box-shadow: 2px 2px 0 #142033;
+  border-width: 2px;
+  animation: none;
+}
+
+.mp-btn-alt {
+  background: #fff;
+}
+
+.mp-room {
+  margin: 0.55rem 0 0;
+  font-size: 0.83rem;
+  color: rgba(243, 240, 231, 0.9);
+}
+
 .title-user {
   margin: 0 0 1rem;
   font-size: 0.92rem;
@@ -532,12 +620,74 @@ body {
   color: #c41e3a;
 }
 
-/* —— Countryballs stats viewer —— */
-.menu-view-countryballs {
+/* —— Countryballs full page —— */
+#screen-countryballs {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1.25rem 1.25rem 2.5rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(43, 58, 107, 0.35), transparent 45%),
+    radial-gradient(ellipse at 85% 100%, rgba(196, 92, 38, 0.22), transparent 48%),
+    linear-gradient(165deg, #152238 0%, #0b1220 48%, #1a2816 100%);
+}
+
+.cb-page {
+  width: min(920px, 100%);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  padding: clamp(1.25rem, 3.5vw, 2.25rem);
-  animation: title-rise 0.45s ease-out both;
+  gap: 0.85rem;
+  padding-bottom: 2rem;
+}
+
+.cb-page-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+}
+
+.cb-page-title {
+  margin: 0;
+  font-family: "Archivo Black", Impact, sans-serif;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  color: #f0c43a;
+  letter-spacing: 0.04em;
+  flex: 1;
+}
+
+.cb-page-lead {
+  margin: 0;
+  color: rgba(243, 240, 231, 0.88);
+  font-size: 0.98rem;
+  max-width: 36rem;
+}
+
+.cb-back {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  opacity: 0.85;
+  padding: 0.25rem 0;
+}
+
+.cb-back:hover,
+.cb-back:focus-visible {
+  opacity: 1;
+  outline: none;
+  color: #f0c43a;
+}
+
+.cb-import-btn {
+  align-self: flex-start;
 }
 
 .cb-layout {
@@ -545,7 +695,12 @@ body {
   grid-template-columns: minmax(10rem, 14rem) 1fr;
   gap: 1.25rem;
   align-items: start;
-  max-width: 44rem;
+  width: 100%;
+}
+
+.cb-roster-wrap .mode-label {
+  color: rgba(243, 240, 231, 0.85);
+  margin-bottom: 0.45rem;
 }
 
 .cb-roster {
@@ -607,9 +762,10 @@ body {
 }
 
 .cb-detail {
-  background: rgba(14, 22, 36, 0.45);
-  border: 2px solid rgba(243, 240, 231, 0.22);
-  padding: 1rem 1.15rem 1.15rem;
+  background: rgba(14, 22, 36, 0.55);
+  border: 3px solid #142033;
+  padding: 1.1rem 1.2rem 1.35rem;
+  box-shadow: inset 0 0 0 1px rgba(240, 196, 58, 0.1);
 }
 
 .cb-portrait-wrap {
@@ -693,6 +849,16 @@ body {
 .cb-hat-btn.is-locked:hover,
 .cb-hat-btn:disabled:hover {
   background: rgba(255, 255, 255, 0.88);
+}
+
+.cb-aura-swatch {
+  display: block;
+  width: 36px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #142033;
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.35);
+  margin: 0.15rem auto 0.1rem;
 }
 
 .cb-name {
@@ -896,14 +1062,13 @@ body {
 }
 
 .cb-coin-bank {
-  display: inline-block;
-  margin-left: 0.5rem;
-  padding: 0.15rem 0.55rem;
+  margin: 0;
+  padding: 0.2rem 0.65rem;
   background: rgba(240, 196, 58, 0.2);
   border: 1px solid rgba(240, 196, 58, 0.55);
   color: #f0c43a;
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   letter-spacing: 0.02em;
 }
 

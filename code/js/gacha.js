@@ -20,6 +20,7 @@ window.CBGacha = (function () {
     { id: "russia", type: "character", name: "Russia", weight: 8 },
     { id: "wpn_deagle_gold", type: "weapon", name: "Gold Deagle", weight: 10 },
     { id: "wpn_katana_blue", type: "weapon", name: "Blue Katana", weight: 10 },
+    { id: "wpn_katana_rainbow", type: "weapon", name: "Rainbow Katana", weight: 8 },
     { id: "wpn_absolut_ice", type: "weapon", name: "Ice Absolut", weight: 10 },
   ];
 

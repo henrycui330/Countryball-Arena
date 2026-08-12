@@ -19,6 +19,39 @@ window.CBJapanAbilities = (function () {
     katanaImg.src = "assets/katana.png";
   }
 
+  function katanaFor(player) {
+    ensureKatanaLoaded();
+    const ballId = (player && player.id) || "japan";
+    if (window.CBCosmetics && CBCosmetics.getEquippedWeaponImage) {
+      const skin = CBCosmetics.getEquippedWeaponImage(ballId);
+      if (skin) return skin;
+    }
+    return katanaImg;
+  }
+
+  function wrathOn(player) {
+    return !!(
+      window.CBCountryballs &&
+      CBCountryballs.hasWrath &&
+      CBCountryballs.hasWrath((player && player.id) || "japan")
+    );
+  }
+
+  function auraId(player) {
+    if (!window.CBCountryballs || !CBCountryballs.getEffectId) return null;
+    return CBCountryballs.getEffectId((player && player.id) || "japan");
+  }
+
+  function auraPalette(player, fallback) {
+    const id = auraId(player);
+    if (!id || id === "none" || !window.CBCosmetics || !CBCosmetics.getEffect) {
+      return fallback.slice();
+    }
+    const fx = CBCosmetics.getEffect(id);
+    if (!fx || !Array.isArray(fx.colors) || !fx.colors.length) return fallback.slice();
+    return fx.colors.slice();
+  }
+
   function ensureShurikenLoaded() {
     if (shurikenImg) return;
     shurikenImg = new Image();
@@ -100,9 +133,10 @@ window.CBJapanAbilities = (function () {
     const dmg = defs.freedomBlast.damage;
     const finisher = willKo(dmg, options.foeHp);
     const a = aimVec(player);
+    const cols = auraPalette(player, COLORS);
     window.CBEffects.spawnKatanaStrike({
       follow: player,
-      img: katanaImg,
+      img: katanaFor(player),
       w: KATANA.w,
       h: KATANA.h,
       pivotX: KATANA.pivotX,
@@ -122,11 +156,18 @@ window.CBJapanAbilities = (function () {
       swingFrom: -1.55,
       swingTo: 0.45,
       finisher,
+      wrath: wrathOn(player),
     });
     window.CBEffects.spawnParticle(
       player.x + a.x * player.radius,
       player.y + a.y * player.radius,
-      { vx: a.x * 80, vy: a.y * 80, life: 0.12, size: 3, color: "#bc002d" }
+      {
+        vx: a.x * 80,
+        vy: a.y * 80,
+        life: 0.12,
+        size: 3,
+        color: cols[0] || "#bc002d",
+      }
     );
     console.log("[Japan] Katana Strike" + (finisher ? " FINISHER" : ""));
     return { ok: true, finisher };
@@ -146,7 +187,7 @@ window.CBJapanAbilities = (function () {
     window.CBEffects.spawnKatanaCharge({
       follow: player,
       target: target,
-      img: katanaImg,
+      img: katanaFor(player),
       w: KATANA.w,
       h: KATANA.h,
       pivotX: KATANA.pivotX,
@@ -167,6 +208,7 @@ window.CBJapanAbilities = (function () {
       arenaW: 960,
       arenaH: 540,
       finisher,
+      wrath: wrathOn(player),
     });
     console.log(
       "[Japan] Shove Stab dmg~" + dmg + (finisher ? " FINISHER" : "")
@@ -183,11 +225,12 @@ window.CBJapanAbilities = (function () {
     const muzzleY = player.y + a.y * (player.radius + 8);
     const target = options.foe && options.foe.hp > 0 ? options.foe : null;
 
-    window.CBEffects.spawnBurst(muzzleX, muzzleY, 8, [
-      "#bc002d",
-      "#ffffff",
-      "#888888",
-    ]);
+    window.CBEffects.spawnBurst(
+      muzzleX,
+      muzzleY,
+      8,
+      auraPalette(player, ["#bc002d", "#ffffff", "#888888"])
+    );
 
     for (let i = 0; i < count; i++) {
       const spread = (i - (count - 1) / 2) * 0.55;
@@ -225,7 +268,7 @@ window.CBJapanAbilities = (function () {
     window.CBEffects.spawnJapanCinemaUlt({
       player: player,
       foe: target,
-      katanaImg: katanaImg,
+      katanaImg: katanaFor(player),
       damage: dmg,
       ownerId: player.id,
       finisher: finisher,
@@ -293,16 +336,18 @@ window.CBJapanAbilities = (function () {
 
   function tickEagleTrail(player) {
     if (Math.random() > 0.4) return;
+    const cols = auraPalette(player, COLORS);
     window.CBEffects.spawnTrail(player.x, player.y, {
       life: 0.22,
       size: player.radius * 0.75,
-      color: "rgba(188,0,45,0.35)",
+      color: cols[0] || "#bc002d",
     });
   }
 
   function tickChargeHold(player, charge01) {
     const t = Math.max(0, Math.min(1, charge01));
     if (Math.random() > 0.45) return;
+    const cols = auraPalette(player, COLORS);
     const a = aimVec(player);
     window.CBEffects.spawnParticle(
       player.x + a.x * player.radius * 0.55,
@@ -312,14 +357,14 @@ window.CBJapanAbilities = (function () {
         vy: (Math.random() - 0.5) * 40 - 25,
         life: 0.22,
         size: 2 + t * 3,
-        color: t > 0.7 ? "#bc002d" : COLORS[Math.floor(Math.random() * 3)],
+        color: t > 0.7 ? cols[0] : cols[Math.floor(Math.random() * cols.length)],
       }
     );
   }
 
-  function getMeleeWeapon() {
+  function getMeleeWeapon(player) {
     return {
-      img: katanaImg,
+      img: katanaFor(player),
       w: KATANA.w,
       h: KATANA.h,
       pivotX: KATANA.pivotX,

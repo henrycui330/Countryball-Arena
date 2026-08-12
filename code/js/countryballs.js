@@ -52,7 +52,7 @@ window.CBCountryballs = (function () {
   }
 
   function emptyInventory() {
-    return { hats: [], weapons: [] };
+    return { hats: [], weapons: [], effects: [] };
   }
 
   function makeBall(id, extras) {
@@ -88,7 +88,14 @@ window.CBCountryballs = (function () {
     return {
       version: 3,
       coins: 0,
-      inventory: emptyInventory(),
+      inventory: (function () {
+        const inv = emptyInventory();
+        inv.effects.push("uncle_sam");
+        inv.effects.push("void_shroud");
+        inv.effects.push("solar_aegis");
+        inv.effects.push("wrath_of_the_gods");
+        return inv;
+      })(),
       balls: {
         usa: makeBall("usa", { owned: true }),
         japan: makeBall("japan", { owned: false }),
@@ -110,6 +117,11 @@ window.CBCountryballs = (function () {
           if (w && inv.weapons.indexOf(w) < 0) inv.weapons.push(String(w));
         });
       }
+      if (Array.isArray(raw.effects)) {
+        raw.effects.forEach(function (e) {
+          if (e && inv.effects.indexOf(e) < 0) inv.effects.push(String(e));
+        });
+      }
     }
     // Migration: keep equipped hats usable
     if (balls) {
@@ -118,8 +130,15 @@ window.CBCountryballs = (function () {
         if (hat && hat !== "samurai" && inv.hats.indexOf(hat) < 0) {
           inv.hats.push(hat);
         }
+        const fx = balls[id] && balls[id].cosmetics && balls[id].cosmetics.effectId;
+        if (fx && inv.effects.indexOf(fx) < 0) inv.effects.push(fx);
       });
     }
+    // Starter auras always owned
+    if (inv.effects.indexOf("uncle_sam") < 0) inv.effects.push("uncle_sam");
+    if (inv.effects.indexOf("void_shroud") < 0) inv.effects.push("void_shroud");
+    if (inv.effects.indexOf("solar_aegis") < 0) inv.effects.push("solar_aegis");
+    if (inv.effects.indexOf("wrath_of_the_gods") < 0) inv.effects.push("wrath_of_the_gods");
     return inv;
   }
 
@@ -309,12 +328,116 @@ window.CBCountryballs = (function () {
     return { ok: true, duplicate: false };
   }
 
+  function setWeapon(ballId, weaponId) {
+    ensure();
+    const ball = roster.balls[ballId];
+    if (!ball || !ball.owned) {
+      console.warn("[CBCountryballs] setWeapon: bad ball", ballId);
+      return { ok: false, error: "ball" };
+    }
+    if (!ball.cosmetics) ball.cosmetics = emptyCosmetics();
+    const id =
+      weaponId == null || weaponId === "" || weaponId === "none"
+        ? null
+        : String(weaponId);
+    if (id) {
+      if (window.CBCosmetics && !CBCosmetics.isWeaponId(id)) {
+        return { ok: false, error: "unknown weapon" };
+      }
+      if (!ownsWeapon(id)) {
+        return { ok: false, error: "locked" };
+      }
+      const w = window.CBCosmetics && CBCosmetics.getWeapon(id);
+      if (w && w.fighter && w.fighter !== ballId) {
+        return { ok: false, error: "wrong fighter" };
+      }
+    }
+    ball.cosmetics.weaponId = id;
+    save();
+    console.log("[CBCountryballs] weapon", ballId, "=", id);
+    return { ok: true, weaponId: id, ball: ball };
+  }
+
+  function getWeaponId(ballId) {
+    const ball = getBall(ballId);
+    if (!ball || !ball.cosmetics) return null;
+    const id = ball.cosmetics.weaponId || null;
+    if (!id) return null;
+    if (!ownsWeapon(id)) return null;
+    if (window.CBCosmetics) {
+      const w = CBCosmetics.getWeapon(id);
+      if (!w || w.id === "none") return null;
+      if (w.fighter && w.fighter !== ballId) return null;
+    }
+    return id;
+  }
+
   function getHatId(ballId) {
     const ball = getBall(ballId);
     if (!ball || !ball.cosmetics) return null;
     const id = ball.cosmetics.hatId || null;
     if (id === "samurai") return null; // removed from catalog
     return id;
+  }
+
+  function ownsEffect(effectId) {
+    if (!effectId || effectId === "none") return true;
+    const inv = getInventory();
+    if (!inv.effects) inv.effects = [];
+    return inv.effects.indexOf(effectId) >= 0;
+  }
+
+  function unlockEffect(effectId) {
+    ensure();
+    if (!effectId || effectId === "none") return { ok: false, duplicate: false };
+    const inv = getInventory();
+    if (!inv.effects) inv.effects = [];
+    if (inv.effects.indexOf(effectId) >= 0) {
+      return { ok: true, duplicate: true };
+    }
+    inv.effects.push(effectId);
+    save();
+    return { ok: true, duplicate: false };
+  }
+
+  function setEffect(ballId, effectId) {
+    ensure();
+    const ball = roster.balls[ballId];
+    if (!ball || !ball.owned) {
+      console.warn("[CBCountryballs] setEffect: bad ball", ballId);
+      return { ok: false, error: "ball" };
+    }
+    if (!ball.cosmetics) ball.cosmetics = emptyCosmetics();
+    const id =
+      effectId == null || effectId === "" || effectId === "none"
+        ? null
+        : String(effectId);
+    if (id) {
+      if (window.CBCosmetics && !CBCosmetics.isEffectId(id)) {
+        return { ok: false, error: "unknown effect" };
+      }
+      if (!ownsEffect(id)) {
+        return { ok: false, error: "locked" };
+      }
+    }
+    ball.cosmetics.effectId = id;
+    save();
+    console.log("[CBCountryballs] effect", ballId, "=", id);
+    return { ok: true, effectId: id, ball: ball };
+  }
+
+  function getEffectId(ballId) {
+    const ball = getBall(ballId);
+    if (!ball || !ball.cosmetics) return null;
+    const id = ball.cosmetics.effectId || null;
+    if (!id) return null;
+    if (!ownsEffect(id)) return null;
+    if (window.CBCosmetics && !CBCosmetics.isEffectId(id)) return null;
+    return id;
+  }
+
+  function hasWrath(ballId) {
+    return getEffectId(ballId) === "wrath_of_the_gods";
   }
 
   /** Replace in-memory + local cache from cloud JSON (no cloud re-upload loop). */
@@ -398,6 +521,8 @@ window.CBCountryballs = (function () {
         const h = (ball.cosmetics && ball.cosmetics.hatId) || null;
         return h === "samurai" ? null : h;
       })(),
+      weaponId: getWeaponId(ball.id),
+      effectId: getEffectId(ball.id),
       maxLevel: MAX_LEVEL,
     };
   }
@@ -548,14 +673,21 @@ window.CBCountryballs = (function () {
     readLocalCacheOnly,
     setHat,
     getHatId,
+    setWeapon,
+    getWeaponId,
+    setEffect,
+    getEffectId,
+    hasWrath,
     getInventory,
     ownsHat,
     ownsWeapon,
+    ownsEffect,
     isCharacterOwned,
     spendCoins,
     addCoins,
     unlockHat,
     unlockWeapon,
+    unlockEffect,
     unlockCharacter,
   };
 })();

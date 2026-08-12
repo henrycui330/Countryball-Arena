@@ -40,6 +40,12 @@ window.CBGachaUI = (function () {
     }
     if (r.type === "weapon") {
       if (r.id === "wpn_deagle_gold") return "assets/weapons/deagle_gold.png";
+      if (r.id === "wpn_katana_blue") return "assets/weapons/katana_blue.png";
+      if (r.id === "wpn_katana_rainbow") return "assets/weapons/katana_rainbow.webp";
+      if (window.CBCosmetics && CBCosmetics.weaponPreviewSrc) {
+        const preview = CBCosmetics.weaponPreviewSrc(r.id);
+        if (preview) return preview;
+      }
       if (r.id.indexOf("deagle") >= 0) return "assets/deagle.png";
       if (r.id.indexOf("katana") >= 0) return "assets/katana.png";
       if (r.id.indexOf("absolut") >= 0) return "assets/absolut.png";

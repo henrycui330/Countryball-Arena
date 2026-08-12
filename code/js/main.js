@@ -122,6 +122,10 @@
     },
   });
 
+  if (window.CBMultiplayerUI && CBMultiplayerUI.init) {
+    CBMultiplayerUI.init();
+  }
+
   const winMenu = document.getElementById("btn-win-menu");
   if (winMenu) {
     winMenu.addEventListener("click", function () {
@@ -132,6 +136,9 @@
   const logoutBtn = document.getElementById("btn-logout");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", async function () {
+      if (window.CBCountryballsUI && CBCountryballsUI.clearSelection) {
+        CBCountryballsUI.clearSelection();
+      }
       if (window.CBAuth) await CBAuth.logout();
       showAuth();
     });

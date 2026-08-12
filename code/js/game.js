@@ -59,6 +59,95 @@ window.CBGame = (function () {
   let holdTime = 0;
   let holdingAttack = false;
   let plungeFx = null;
+  let plungeWrathTimer = 0;
+  let plungeTrailTimer = 0;
+  let plungeHitStop = null;
+  let foeKoAnim = null;
+  let auraAmbientTimer = 0;
+  let netSendTimer = 0;
+  let remoteGhost = null;
+
+  function playerHasWrath() {
+    return !!(
+      player &&
+      window.CBCountryballs &&
+      CBCountryballs.hasWrath &&
+      CBCountryballs.hasWrath(player.id)
+    );
+  }
+
+  function playerAuraId() {
+    if (!player || !window.CBCountryballs || !CBCountryballs.getEffectId) return null;
+    return CBCountryballs.getEffectId(player.id);
+  }
+
+  function playerAuraColors(fallback) {
+    const auraId = playerAuraId();
+    if (!auraId || auraId === "none" || !window.CBCosmetics || !CBCosmetics.getEffect) {
+      return fallback.slice();
+    }
+    const fx = CBCosmetics.getEffect(auraId);
+    if (!fx || !Array.isArray(fx.colors) || !fx.colors.length) return fallback.slice();
+    return fx.colors.slice();
+  }
+
+  function auraFacingRot() {
+    if (!player) return 0;
+    return player.facing < 0 ? -0.32 : 0.32;
+  }
+
+  function drawAuraGlow(cx, cy, rx, ry, rot, stops) {
+    const base = Math.max(rx, ry);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+    ctx.scale(rx / base, ry / base);
+    const g = ctx.createRadialGradient(0, 0, base * 0.14, 0, 0, base);
+    stops.forEach(function (s) {
+      g.addColorStop(s[0], s[1]);
+    });
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, base, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function traceAuraBlob(cx, cy, rx, ry, rot, wobble, segments) {
+    const segs = segments || 36;
+    ctx.beginPath();
+    for (let i = 0; i <= segs; i++) {
+      const t = (i / segs) * Math.PI * 2;
+      const wob = 1 + wobble * Math.sin(t * 3 + timeSec * 3.6);
+      const lx = Math.cos(t) * rx * wob;
+      const ly = Math.sin(t) * ry * wob;
+      const x = cx + lx * Math.cos(rot) - ly * Math.sin(rot);
+      const y = cy + lx * Math.sin(rot) + ly * Math.cos(rot);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  }
+
+  function strokeAuraBlob(cx, cy, rx, ry, rot, wobble, color, lineWidth) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    traceAuraBlob(cx, cy, rx, ry, rot, wobble, 36);
+    ctx.stroke();
+  }
+
+  function fillAuraBlob(cx, cy, rx, ry, rot, wobble, color) {
+    ctx.fillStyle = color;
+    traceAuraBlob(cx, cy, rx, ry, rot, wobble, 28);
+    ctx.fill();
+  }
+
+  function auraOrbit(cx, cy, ang, rx, ry, yOff) {
+    return {
+      x: cx + Math.cos(ang) * rx,
+      y: cy + (yOff || 0) + Math.sin(ang) * ry,
+    };
+  }
 
   function normalizeConfig(cfg) {
     const c = cfg || {};
@@ -126,6 +215,12 @@ window.CBGame = (function () {
   function pickFighterImg() {
     if (matchConfig.fighter === "japan") return japanImg;
     if (matchConfig.fighter === "russia") return russiaImg;
+    return usaImg;
+  }
+
+  function fighterImgById(id) {
+    if (id === "japan") return japanImg;
+    if (id === "russia") return russiaImg;
     return usaImg;
   }
 
@@ -205,6 +300,11 @@ window.CBGame = (function () {
     respawnEvent = null;
     ultCamFollowUp = null;
     sloMo = null;
+    foeKoAnim = null;
+    plungeHitStop = null;
+    plungeTrailTimer = 0;
+    remoteGhost = null;
+    netSendTimer = 0;
     const mapName = map.name || matchConfig.mapId;
     statusMsg =
       (matchConfig.matchType === "custom" ? "Custom" : "Quick") +
@@ -327,7 +427,7 @@ window.CBGame = (function () {
 
     const wpn =
       typeof abilities().getMeleeWeapon === "function"
-        ? abilities().getMeleeWeapon()
+        ? abilities().getMeleeWeapon(player)
         : null;
     if (!wpn || !window.CBEffects || !window.CBEffects.spawnPlungeAttack) {
       console.warn("[CBGame] plunge weapon missing");
@@ -337,6 +437,7 @@ window.CBGame = (function () {
     player.plunging = true;
     player.vy = PLUNGE_VY;
     clearPlungeFx();
+    const plungeCols = playerAuraColors(["#ffffff", "#f7d354", "#b22234"]);
     plungeFx = window.CBEffects.spawnPlungeAttack({
       follow: player,
       img: wpn.img,
@@ -348,7 +449,19 @@ window.CBGame = (function () {
       muzzleLocalY: wpn.muzzleLocalY,
       handDist: wpn.handDist ?? 0.48,
       life: 2.5,
+      trailColor: "rgba(255,255,255,0.42)",
+      sparkColor: plungeCols[0] || "#ffffff",
     });
+    plungeWrathTimer = 0;
+    plungeTrailTimer = 0;
+    auraAmbientTimer = 0;
+    if (playerHasWrath() && window.CBEffects.spawnWrathLightning) {
+      window.CBEffects.spawnWrathLightning(player.x, player.y, { count: 4 });
+    }
+    if (window.CBCamera) {
+      window.CBCamera.focusOn(player.x, player.y + 55, 1.3, 0.5);
+      window.CBCamera.addShake(0.22);
+    }
     cooldowns.freedomBlast = Math.max(cooldowns.freedomBlast || 0, 0.35);
     statusMsg = "Plunge!";
     statusTimer = 0.6;
@@ -363,27 +476,54 @@ window.CBGame = (function () {
 
     const wpn =
       typeof abilities().getMeleeWeapon === "function"
-        ? abilities().getMeleeWeapon()
+        ? abilities().getMeleeWeapon(player)
         : {};
     const dmg = wpn.plungeDamage || 22;
     const target = foe();
     const hitY = player.y + player.radius * 0.35;
+    let landedHit = false;
 
     if (window.CBEffects) {
-      window.CBEffects.spawnBurst(player.x, hitY, 18, [
-        "#ffffff",
-        "#f7d354",
-        "#b22234",
-      ]);
+      const wrath = playerHasWrath();
+      const cols = playerAuraColors(["#ffffff", "#f7d354", "#b22234"]);
+      const auraId = playerAuraId();
+      let waveCol = "rgba(255,255,255,0.72)";
+      if (auraId === "uncle_sam") waveCol = "rgba(31,75,165,0.72)";
+      else if (auraId === "void_shroud") waveCol = "rgba(166,107,255,0.68)";
+      else if (auraId === "solar_aegis") waveCol = "rgba(255,215,106,0.72)";
+      else if (wrath) waveCol = "rgba(255,50,50,0.75)";
+
+      if (window.CBEffects.spawnShockwave) {
+        window.CBEffects.spawnShockwave(player.x, hitY, {
+          maxRadius: 150,
+          color: waveCol,
+          width: 4,
+        });
+        window.CBEffects.spawnShockwave(player.x, hitY, {
+          maxRadius: 95,
+          radius: 12,
+          color: "rgba(255,255,255,0.5)",
+          width: 2.2,
+          life: 0.28,
+        });
+      }
+      window.CBEffects.spawnBurst(
+        player.x,
+        hitY,
+        22,
+        wrath ? ["#ff1a1a", "#ff4d4d", "#8b0000", "#ffffff"] : cols
+      );
       window.CBEffects.spawnParticle(player.x, hitY, {
         vx: 0,
-        vy: -80,
-        life: 0.25,
-        size: 8,
-        color: "#ffffff",
+        vy: -120,
+        life: 0.32,
+        size: 10,
+        color: wrath ? "#ff1a1a" : cols[0] || "#ffffff",
       });
+      if (wrath && window.CBEffects.spawnWrathLightning) {
+        window.CBEffects.spawnWrathLightning(player.x, hitY, { count: 8 });
+      }
     }
-    if (window.CBCamera) window.CBCamera.addShake(0.35);
 
     if (target && target.hp > 0) {
       const dx = target.x - player.x;
@@ -391,13 +531,14 @@ window.CBGame = (function () {
       const dist = Math.hypot(dx, dy);
       const reach = PLUNGE_HIT_RADIUS + (target.radius || 30);
       if (dist < reach) {
+        landedHit = true;
         const finisher = dmg >= target.hp;
         target.hp = Math.max(0, target.hp - dmg);
-        target.flash = 0.25;
+        target.flash = 0.45;
         const nx = dist > 1 ? dx / dist : player.facing || 1;
-        target.x += nx * 28;
-        if (target.vy != null) target.vy = -260;
-        else target.y -= 18;
+        target.x += nx * (finisher ? 52 : 34);
+        if (target.vy != null) target.vy = finisher ? -340 : -260;
+        else target.y -= finisher ? 28 : 18;
         if (window.CBMaps && map) {
           window.CBMaps.resolveEntity(target, map, W, H);
         } else {
@@ -406,10 +547,32 @@ window.CBGame = (function () {
         console.log(
           "[CBGame] plunge hit dmg=" + dmg + " foeHp=" + target.hp
         );
+        plungeHitStop = { timer: 0.1, scale: 0.08 };
+        if (window.CBCamera) {
+          window.CBCamera.focusOn(
+            (player.x + target.x) * 0.5,
+            (hitY + target.y) * 0.5,
+            1.78,
+            0.75
+          );
+          window.CBCamera.addShake(finisher ? 0.72 : 0.55);
+        }
         if (finisher) startFinisherSloMo("plunge");
+        if (target.hp <= 0) {
+          handleFoeKo(target, isBotOpponent() ? "enemy" : "dummy", {
+            knockDir: { x: nx, y: -0.42 },
+            power: 1.7,
+            vy: -390,
+          });
+        }
       } else {
         console.log("[CBGame] plunge miss dist=" + dist.toFixed(0));
       }
+    }
+
+    if (!landedHit && window.CBCamera) {
+      window.CBCamera.focusOn(player.x, hitY, 1.48, 0.4);
+      window.CBCamera.addShake(0.42);
     }
   }
 
@@ -451,6 +614,105 @@ window.CBGame = (function () {
       player.grounded = true;
     } else {
       player.grounded = false;
+    }
+  }
+
+  function tickPlungeFx(dt) {
+    if (!player || !player.plunging) return;
+    plungeTrailTimer -= dt;
+    if (plungeTrailTimer <= 0 && window.CBEffects) {
+      plungeTrailTimer = 0.035;
+      const cols = playerAuraColors(["#ffffff", "#f7d354", "#b22234"]);
+      window.CBEffects.spawnTrail(player.x, player.y - player.radius * 0.15, {
+        life: 0.24,
+        size: player.radius * 0.95,
+        color: cols[Math.floor(Math.random() * cols.length)],
+      });
+    }
+    if (!playerHasWrath()) return;
+    plungeWrathTimer -= dt;
+    if (plungeWrathTimer <= 0) {
+      plungeWrathTimer = 0.12;
+      if (window.CBEffects && window.CBEffects.spawnWrathLightning) {
+        window.CBEffects.spawnWrathLightning(player.x, player.y - 10, {
+          count: 2,
+        });
+      }
+    }
+  }
+
+  function tickAuraAmbient(dt) {
+    if (!player || !window.CBEffects) return;
+    const auraId = playerAuraId();
+    if (!auraId || auraId === "none") return;
+    auraAmbientTimer -= dt;
+    if (auraAmbientTimer > 0) return;
+
+    if (auraId === "uncle_sam") {
+      auraAmbientTimer = 0.045;
+      const ang = Math.random() * Math.PI * 2;
+      const rx = player.radius * (0.95 + Math.random() * 1.0);
+      const ry = player.radius * (0.58 + Math.random() * 0.62);
+      const px = player.x + Math.cos(ang) * rx;
+      const py = player.y - 4 + Math.sin(ang) * ry;
+      window.CBEffects.spawnTrail(px, py, {
+        life: 0.22,
+        size: 10 + Math.random() * 12,
+        color: Math.random() > 0.5 ? "rgba(31,75,165,0.45)" : "rgba(215,38,61,0.45)",
+      });
+      if (Math.random() > 0.55) {
+        window.CBEffects.spawnParticle(px, py, {
+          vx: (Math.random() - 0.5) * 70,
+          vy: -20 - Math.random() * 60,
+          life: 0.26,
+          size: 2 + Math.random() * 2,
+          color: "#ffffff",
+        });
+      }
+    } else if (auraId === "void_shroud") {
+      auraAmbientTimer = 0.06;
+      const ang = Math.random() * Math.PI * 2;
+      const rx = player.radius * (1.05 + Math.random() * 0.85);
+      const ry = player.radius * (0.5 + Math.random() * 0.48);
+      const px = player.x + Math.cos(ang) * rx;
+      const py = player.y - 2 + Math.sin(ang) * ry;
+      window.CBEffects.spawnTrail(px, py, {
+        life: 0.28,
+        size: 11 + Math.random() * 10,
+        color: "rgba(86,32,131,0.42)",
+      });
+      if (Math.random() > 0.72) {
+        window.CBEffects.spawnParticle(px, py, {
+          vx: (Math.random() - 0.5) * 35,
+          vy: -10 - Math.random() * 35,
+          life: 0.24,
+          size: 2 + Math.random() * 2.4,
+          color: "rgba(226,204,255,0.92)",
+        });
+      }
+    } else if (auraId === "solar_aegis") {
+      auraAmbientTimer = 0.05;
+      const ang = Math.random() * Math.PI * 2;
+      const rx = player.radius * (0.72 + Math.random() * 0.82);
+      const ry = player.radius * (0.95 + Math.random() * 1.05);
+      const px = player.x + Math.cos(ang) * rx;
+      const py = player.y - 5 + Math.sin(ang) * ry;
+      window.CBEffects.spawnTrail(px, py, {
+        life: 0.24,
+        size: 10 + Math.random() * 11,
+        color: "rgba(246,183,60,0.44)",
+      });
+      if (Math.random() > 0.62) {
+        window.CBEffects.spawnParticle(px, py, {
+          vx: (Math.random() - 0.5) * 45,
+          vy: -25 - Math.random() * 55,
+          life: 0.27,
+          size: 2 + Math.random() * 2,
+          color: "rgba(255,249,232,0.94)",
+        });
+      }
+    } else {
+      auraAmbientTimer = 0.09;
     }
   }
 
@@ -559,23 +821,225 @@ window.CBGame = (function () {
     }
   }
 
+  function buildFoeRespawn(kind) {
+    let pending;
+    if (foeLives != null) {
+      foeLives -= 1;
+      console.log("[CBGame] foe life lost →", foeLives);
+      pending =
+        foeLives <= 0
+          ? { kind: "matchWin", timer: 1.15 }
+          : {
+              kind: kind === "enemy" ? "enemy" : "dummy",
+              timer: kind === "enemy" ? 1.3 : 1.1,
+            };
+    } else {
+      pending = {
+        kind: kind === "enemy" ? "enemy" : "dummy",
+        timer: kind === "enemy" ? 1.2 : 1.05,
+      };
+    }
+    return pending;
+  }
+
+  function beginFoeKo(entity, kind, opts) {
+    const o = opts || {};
+    if (!entity || foeKoAnim) return;
+    const px = player ? player.x : entity.x - 50;
+    const py = player ? player.y : entity.y;
+    let nx = entity.x - px;
+    let ny = entity.y - py - 16;
+    const len = Math.hypot(nx, ny) || 1;
+    nx /= len;
+    ny /= len;
+    if (o.knockDir) {
+      nx = o.knockDir.x;
+      ny = o.knockDir.y;
+      const dl = Math.hypot(nx, ny) || 1;
+      nx /= dl;
+      ny /= dl;
+    }
+    const power = o.power || 1;
+    const duration = o.duration || 0.8;
+    foeKoAnim = {
+      kind: kind,
+      x: entity.x,
+      y: entity.y,
+      radius: entity.radius || 38,
+      vx: nx * (260 + 140 * power),
+      vy: o.vy != null ? o.vy : -300 - 90 * power,
+      rot: 0,
+      spin: (Math.random() > 0.5 ? 1 : -1) * (9 + 5 * power),
+      scale: 1,
+      alpha: 1,
+      timer: duration,
+      maxTimer: duration,
+      flash: 0.55,
+      isBot: kind === "enemy",
+      enemySnapshot: kind === "enemy" ? Object.assign({}, entity) : null,
+      pending: o.pending || buildFoeRespawn(kind),
+    };
+    if (window.CBCamera) {
+      window.CBCamera.focusOn(entity.x, entity.y, 1.9, 1.0);
+      window.CBCamera.addShake(0.55);
+    }
+    if (sloMo) {
+      sloMo.endReal = Math.max(sloMo.endReal || 0, 1.0);
+    } else {
+      startFinisherSloMo("ko");
+    }
+    console.log("[CBGame] foe KO launch", kind);
+  }
+
+  function completeFoeKo() {
+    if (!foeKoAnim) return;
+    const anim = foeKoAnim;
+    foeKoAnim = null;
+    triggerKoExplosion(anim.kind, anim.x, anim.y);
+    if (anim.pending) respawnEvent = anim.pending;
+  }
+
+  function updateFoeKo(dt) {
+    if (!foeKoAnim) return;
+    const a = foeKoAnim;
+    a.timer -= dt;
+    a.x += a.vx * dt;
+    a.y += a.vy * dt;
+    a.vy += GRAVITY * 0.48 * dt;
+    a.rot += a.spin * dt;
+    a.flash = Math.max(0, a.flash - dt * 1.5);
+    const prog = 1 - Math.max(0, a.timer) / (a.maxTimer || 0.8);
+    if (prog > 0.5) a.scale = Math.max(0.12, 1 - (prog - 0.5) * 1.15);
+    if (prog > 0.62) a.alpha = Math.max(0, 1 - (prog - 0.62) / 0.38);
+
+    a.x = Math.max(a.radius * a.scale, Math.min(W - a.radius * a.scale, a.x));
+    const minY = a.radius * a.scale + 16;
+    const maxY = floorY() + 36;
+    a.y = Math.max(minY, Math.min(maxY, a.y));
+
+    if (a.enemySnapshot) {
+      a.enemySnapshot.x = a.x;
+      a.enemySnapshot.y = a.y;
+      a.enemySnapshot.radius = a.radius * a.scale;
+      a.enemySnapshot.flash = a.flash;
+    }
+
+    if (window.CBCamera) {
+      window.CBCamera.focusOn(a.x, a.y - 10, 1.85 + prog * 0.15, 0.2);
+    }
+
+    if (window.CBEffects && Math.random() > 0.45) {
+      window.CBEffects.spawnParticle(a.x, a.y, {
+        vx: (Math.random() - 0.5) * 110,
+        vy: (Math.random() - 0.5) * 110,
+        life: 0.24,
+        size: 2 + Math.random() * 3,
+        color: a.kind === "enemy" ? "#ffca28" : "#dddddd",
+      });
+    }
+
+    if (a.timer <= 0) completeFoeKo();
+  }
+
+  function drawFoeKo(sil) {
+    if (!foeKoAnim || sil) return;
+    const a = foeKoAnim;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, a.alpha);
+    if (a.isBot && a.enemySnapshot) {
+      ctx.translate(a.x, a.y);
+      ctx.rotate(a.rot);
+      const snap = Object.assign({}, a.enemySnapshot, {
+        x: 0,
+        y: 0,
+        radius: a.radius * a.scale,
+      });
+      enemyApi().draw(ctx, snap);
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, a.alpha);
+    } else {
+      ctx.translate(a.x, a.y);
+      ctx.rotate(a.rot);
+      const r = a.radius * a.scale;
+      drawEntityCircle({ x: 0, y: 0, radius: r }, "#6b6b6b");
+      ctx.fillStyle = "#222";
+      ctx.beginPath();
+      ctx.arc(-12, -8, 5, 0, Math.PI * 2);
+      ctx.arc(12, -8, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, a.alpha);
+    }
+    if (a.flash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.9, a.flash * 2.2)})`;
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, a.radius * a.scale * 1.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function handleFoeKo(entity, kind, opts) {
+    if (!entity || foeKoAnim) return;
+    statusMsg = kind === "enemy" ? "Enemy KO!" : "Dummy KO!";
+    statusTimer = 1.6;
+    if (window.CBCountryballs && CBCountryballs.awardFoeKo) {
+      const award = CBCountryballs.awardFoeKo(matchConfig);
+      if (award) {
+        statusMsg = award.summary;
+        statusTimer = award.levelsGained > 0 ? 2.8 : 2.0;
+      }
+    }
+    beginFoeKo(entity, kind, opts);
+    if (kind === "dummy") dummy = null;
+    else if (kind === "enemy") enemy = null;
+  }
+
   function triggerKoExplosion(kind, x, y) {
-    const colors =
-      kind === "enemy"
+    const wrathFinisher =
+      playerHasWrath() && sloMo && kind !== "player";
+    const red = ["#ff1a1a", "#ff4d4d", "#8b0000", "#ffffff", "#bf360c"];
+    const colors = wrathFinisher
+      ? red
+      : kind === "enemy"
         ? ["#c62828", "#ffca28", "#ffffff", "#bf360c", "#f7d354"]
         : kind === "player"
           ? ["#b22234", "#3c3b6e", "#ffffff", "#f7d354"]
           : ["#888", "#ccc", "#444", "#fff"];
-    if (window.CBEffects.spawnExplosion) {
-      window.CBEffects.spawnExplosion(x, y, { power: kind === "enemy" ? 1.5 : 1.2, colors });
+
+    function boom() {
+      if (window.CBEffects.spawnExplosion) {
+        window.CBEffects.spawnExplosion(x, y, {
+          power: kind === "enemy" ? 1.85 : kind === "dummy" ? 1.45 : 1.2,
+          colors: colors,
+        });
+      } else {
+        window.CBEffects.spawnBurst(x, y, 24, colors);
+      }
+      if (window.CBCamera) {
+        window.CBCamera.focusOn(x, y, 1.6, 1.15);
+        window.CBCamera.addShake(0.55);
+      }
+      console.log("[CBGame] KO explosion", kind, Math.round(x), Math.round(y));
+    }
+
+    if (
+      wrathFinisher &&
+      window.CBEffects.spawnFinisherCross
+    ) {
+      window.CBEffects.spawnFinisherCross({
+        x: x,
+        y: y,
+        radius: 52,
+        colors: red,
+        onDone: boom,
+      });
+      console.log("[CBGame] Wrath finisher cross");
     } else {
-      window.CBEffects.spawnBurst(x, y, 24, colors);
+      boom();
     }
-    if (window.CBCamera) {
-      window.CBCamera.focusOn(x, y, 1.6, 1.15);
-      window.CBCamera.addShake(0.55);
-    }
-    console.log("[CBGame] KO explosion", kind, Math.round(x), Math.round(y));
   }
 
   function onKeyDown(e) {
@@ -708,6 +1172,9 @@ window.CBGame = (function () {
     } else {
       applyPlayerPhysics(dt);
     }
+    tickPlungeFx(dt);
+    tickAuraAmbient(dt);
+    updateFoeKo(dt);
 
     updateAimFromMouse();
 
@@ -767,56 +1234,14 @@ window.CBGame = (function () {
       console.log("[CBGame] player hit hp=" + player.hp);
     }
 
-    // —— KO: explode, camera focus, delayed respawn / lose life ——
-    if (!respawnEvent && !matchOver) {
+    // —— KO: launch away from player, then explode ——
+    if (!respawnEvent && !matchOver && !foeKoAnim) {
       if (matchConfig.opponent === "dummy" && dummy && dummy.hp <= 0) {
-        statusMsg = "Dummy KO!";
-        statusTimer = 1.2;
-        triggerKoExplosion("dummy", dummy.x, dummy.y);
-        dummy = null;
-        if (foeLives != null) {
-          foeLives -= 1;
-          console.log("[CBGame] foe life lost →", foeLives);
-          respawnEvent =
-            foeLives <= 0
-              ? { kind: "matchWin", timer: 1.0 }
-              : { kind: "dummy", timer: 1.0 };
-        } else {
-          respawnEvent = { kind: "dummy", timer: 1.0 };
-        }
-        if (sloMo) sloMo.endReal = 0.85;
-        if (window.CBCountryballs && CBCountryballs.awardFoeKo) {
-          const award = CBCountryballs.awardFoeKo(matchConfig);
-          if (award) {
-            statusMsg = award.summary;
-            statusTimer = award.levelsGained > 0 ? 2.8 : 2.0;
-          }
-        }
+        handleFoeKo(dummy, "dummy");
       }
 
       if (isBotOpponent() && enemy && enemy.hp <= 0) {
-        statusMsg = "Enemy KO!";
-        statusTimer = 1.4;
-        triggerKoExplosion("enemy", enemy.x, enemy.y);
-        enemy = null;
-        if (foeLives != null) {
-          foeLives -= 1;
-          console.log("[CBGame] foe life lost →", foeLives);
-          respawnEvent =
-            foeLives <= 0
-              ? { kind: "matchWin", timer: 1.1 }
-              : { kind: "enemy", timer: 1.15 };
-        } else {
-          respawnEvent = { kind: "enemy", timer: 1.15 };
-        }
-        if (sloMo) sloMo.endReal = 0.85;
-        if (window.CBCountryballs && CBCountryballs.awardFoeKo) {
-          const award = CBCountryballs.awardFoeKo(matchConfig);
-          if (award) {
-            statusMsg = award.summary;
-            statusTimer = award.levelsGained > 0 ? 2.8 : 2.0;
-          }
-        }
+        handleFoeKo(enemy, "enemy");
       }
 
       if (isBotOpponent() && player.hp <= 0) {
@@ -929,6 +1354,8 @@ window.CBGame = (function () {
       });
     }
 
+    publishMultiplayerState(dt);
+
     updateHud();
   }
 
@@ -968,6 +1395,42 @@ window.CBGame = (function () {
       bits.push("Allies " + window.CBAllies.getList().length);
     }
     el.textContent = bits.join(" · ");
+  }
+
+  function publishMultiplayerState(dt) {
+    if (!window.CBNetClient || !player) return;
+    const net = CBNetClient.getState ? CBNetClient.getState() : null;
+    if (!net || !net.connected || !net.roomCode) return;
+    netSendTimer -= dt;
+    if (netSendTimer > 0) return;
+    netSendTimer = 0.05;
+    if (CBNetClient.sendState) {
+      CBNetClient.sendState({
+        x: player.x,
+        y: player.y,
+        hp: player.hp,
+        maxHp: player.maxHp,
+        facing: player.facing,
+        fighter: player.id,
+        radius: player.radius,
+        ts: Date.now(),
+      });
+    }
+  }
+
+  function setRemoteSnapshot(snapshot) {
+    const s = snapshot || {};
+    if (typeof s.x !== "number" || typeof s.y !== "number") return;
+    remoteGhost = {
+      x: s.x,
+      y: s.y,
+      hp: typeof s.hp === "number" ? s.hp : 100,
+      maxHp: typeof s.maxHp === "number" ? s.maxHp : 100,
+      facing: s.facing >= 0 ? 1 : -1,
+      fighter: s.fighter || "usa",
+      radius: typeof s.radius === "number" ? s.radius : 42,
+      ts: typeof s.ts === "number" ? s.ts : Date.now(),
+    };
   }
 
   function drawEntityCircle(ent, fill) {
@@ -1111,6 +1574,42 @@ window.CBGame = (function () {
       }
     }
 
+    if (remoteGhost && !sil) {
+      const ageMs = Date.now() - (remoteGhost.ts || 0);
+      if (ageMs < 2200) {
+        const gImg = fighterImgById(remoteGhost.fighter);
+        const gx = remoteGhost.x;
+        const gy = remoteGhost.y;
+        const gr = remoteGhost.radius || 42;
+        if (gImg && gImg.complete) {
+          const sz = gr * 2;
+          ctx.save();
+          ctx.globalAlpha = 0.82;
+          ctx.translate(gx, gy);
+          if (remoteGhost.facing < 0) ctx.scale(-1, 1);
+          ctx.drawImage(gImg, -sz / 2, -sz / 2, sz, sz);
+          ctx.restore();
+        } else {
+          ctx.save();
+          ctx.globalAlpha = 0.82;
+          drawEntityCircle({ x: gx, y: gy, radius: gr, flash: 0 }, "#8aa0c7");
+          ctx.restore();
+        }
+        drawHpBar(
+          {
+            x: gx,
+            y: gy,
+            radius: gr,
+            hp: Math.max(0, remoteGhost.hp || 0),
+            maxHp: remoteGhost.maxHp || 100,
+          },
+          "Remote"
+        );
+      }
+    }
+
+    drawFoeKo(sil);
+
     if (window.CBAllies && !sil) {
       window.CBAllies.draw(ctx);
     }
@@ -1119,10 +1618,147 @@ window.CBGame = (function () {
     const hidePlayer =
       respawnEvent && respawnEvent.kind === "player" && player.hp < 1;
     if (!hidePlayer) {
+      const auraId = !sil ? playerAuraId() : null;
+      const auraOn = !!(auraId && auraId !== "none");
+      let floatY = 0;
+      if (auraOn) {
+        const floatAmp =
+          auraId === "void_shroud" ? 2.1 : auraId === "solar_aegis" ? 1.8 : 2.5;
+        const floatBase =
+          auraId === "void_shroud" ? -5 : auraId === "solar_aegis" ? -4 : -7;
+        const floatSpeed =
+          auraId === "uncle_sam" ? 3.6 : auraId === "void_shroud" ? 2.5 : 3.1;
+        floatY = floatBase + Math.sin(timeSec * floatSpeed) * floatAmp;
+      }
+      if (auraOn) {
+        ctx.save();
+        const cy = player.y + floatY;
+        const r = player.radius;
+        const rot = auraFacingRot();
+        if (auraId === "uncle_sam") {
+          drawAuraGlow(player.x, cy, r * 2.75, r * 1.82, rot, [
+            [0, "rgba(255, 255, 255, 0.34)"],
+            [0.36, "rgba(31, 75, 165, 0.24)"],
+            [0.68, "rgba(215, 38, 61, 0.21)"],
+            [1, "rgba(122, 0, 20, 0)"],
+          ]);
+          strokeAuraBlob(
+            player.x,
+            cy,
+            r * (1.36 + 0.05 * Math.sin(timeSec * 6.4)),
+            r * 0.9,
+            rot,
+            0.06,
+            "rgba(255,255,255,0.45)",
+            2.2
+          );
+          strokeAuraBlob(
+            player.x,
+            cy,
+            r * (1.68 + 0.06 * Math.cos(timeSec * 5.2)),
+            r * 1.08,
+            rot + 0.18,
+            0.05,
+            "rgba(215,38,61,0.42)",
+            2.6
+          );
+          for (let i = 0; i < 6; i++) {
+            const ang = timeSec * 2.2 + (Math.PI * 2 * i) / 6;
+            const p = auraOrbit(player.x, cy, ang, r * 1.12, r * 0.68);
+            ctx.fillStyle = i % 2 ? "rgba(31,75,165,0.9)" : "rgba(255,255,255,0.95)";
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, 2.2, 1.4, rot, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (auraId === "void_shroud") {
+          drawAuraGlow(player.x, cy, r * 2.55, r * 1.62, rot + 0.45, [
+            [0, "rgba(226, 204, 255, 0.22)"],
+            [0.42, "rgba(95, 42, 138, 0.23)"],
+            [0.8, "rgba(42, 10, 66, 0.2)"],
+            [1, "rgba(16, 8, 24, 0)"],
+          ]);
+          strokeAuraBlob(
+            player.x,
+            cy,
+            r * (1.5 + 0.08 * Math.sin(timeSec * 4.2)),
+            r * 0.82,
+            rot + 0.55,
+            0.08,
+            "rgba(166,107,255,0.28)",
+            2
+          );
+          for (let i = 0; i < 4; i++) {
+            const ang = timeSec * 1.4 + i * 1.7;
+            const p = auraOrbit(player.x, cy, ang, r * 0.95, r * 0.5);
+            fillAuraBlob(
+              p.x,
+              p.y,
+              r * (0.34 + i * 0.04),
+              r * (0.22 + i * 0.03),
+              rot + i * 0.4,
+              0.1,
+              "rgba(166, 107, 255, 0.16)"
+            );
+          }
+        } else if (auraId === "solar_aegis") {
+          drawAuraGlow(player.x, cy, r * 2.15, r * 2.65, rot - 0.15, [
+            [0, "rgba(255, 249, 232, 0.4)"],
+            [0.45, "rgba(255, 215, 106, 0.26)"],
+            [0.78, "rgba(246, 183, 60, 0.2)"],
+            [1, "rgba(201, 134, 26, 0)"],
+          ]);
+          strokeAuraBlob(
+            player.x,
+            cy,
+            r * (1.42 + 0.06 * Math.sin(timeSec * 5.1)),
+            r * 1.22,
+            rot - 0.1,
+            0.05,
+            "rgba(255,249,232,0.42)",
+            2.1
+          );
+          strokeAuraBlob(
+            player.x,
+            cy,
+            r * (1.82 + 0.05 * Math.cos(timeSec * 4.7)),
+            r * 1.48,
+            rot + 0.12,
+            0.04,
+            "rgba(246,183,60,0.34)",
+            2.8
+          );
+          for (let i = 0; i < 5; i++) {
+            const ang = timeSec * 1.9 + i * 1.2;
+            const rise = (timeSec * 18 + i * 10) % 22;
+            const p = auraOrbit(player.x, cy - rise, ang, r * 0.88, r * 1.05);
+            ctx.fillStyle = i % 2 ? "rgba(255, 215, 106, 0.85)" : "rgba(255, 249, 232, 0.85)";
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, 1.8, 2.6, rot, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          drawAuraGlow(player.x, cy, r * 2.5, r * 1.75, rot, [
+            [0, "rgba(255, 50, 50, 0.4)"],
+            [0.55, "rgba(200, 0, 0, 0.18)"],
+            [1, "rgba(180, 0, 0, 0)"],
+          ]);
+          strokeAuraBlob(
+            player.x,
+            cy,
+            r * 1.55,
+            r * 1.02,
+            rot + 0.25,
+            0.07,
+            "rgba(255,80,80,0.35)",
+            2.2
+          );
+        }
+        ctx.restore();
+      }
       if (fighterImg && fighterImg.complete) {
         const size = player.radius * 2;
         ctx.save();
-        ctx.translate(player.x, player.y);
+        ctx.translate(player.x, player.y + floatY);
         if (player.facing < 0) ctx.scale(-1, 1);
         if (invulnTimer > 0 && !sil) {
           ctx.globalAlpha = 0.55 + Math.sin(timeSec * 30) * 0.25;
@@ -1144,8 +1780,12 @@ window.CBGame = (function () {
             hat._aspect = aspect;
             const w = player.radius * 2 * hat.scale;
             const hh = w / aspect;
-            const hx = hat.ox * player.radius - w / 2;
-            const hy = hat.oy * player.radius - hh / 2;
+            const nudge =
+              CBCosmetics.fighterHatNudge
+                ? CBCosmetics.fighterHatNudge(player.id)
+                : { ox: 0, oy: 0 };
+            const hx = (hat.ox + nudge.ox) * player.radius - w / 2;
+            const hy = (hat.oy + nudge.oy) * player.radius - hh / 2;
             ctx.drawImage(himg, hx, hy, w, hh);
           }
         }
@@ -1154,14 +1794,20 @@ window.CBGame = (function () {
         if (player.flash > 0 && !sil) {
           ctx.fillStyle = `rgba(255,255,255,${Math.min(0.7, player.flash * 3)})`;
           ctx.beginPath();
-          ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+          ctx.arc(player.x, player.y + floatY, player.radius, 0, Math.PI * 2);
           ctx.fill();
         }
       } else {
-        drawEntityCircle(player, sil ? "#000" : "#b22234");
+        drawEntityCircle(
+          { x: player.x, y: player.y + floatY, radius: player.radius },
+          sil ? "#000" : "#b22234"
+        );
       }
       if (!sil) {
-        drawHpBar(player, fighterLabel());
+        drawHpBar(
+          { x: player.x, y: player.y + floatY, radius: player.radius, hp: player.hp, maxHp: player.maxHp },
+          fighterLabel()
+        );
         drawChargeRing();
       }
     }
@@ -1196,8 +1842,15 @@ window.CBGame = (function () {
     let rawDt = (ts - lastTs) / 1000;
     lastTs = ts;
     if (rawDt > 0.05) rawDt = 0.05;
-    const gameDt = sloMo ? rawDt * sloMo.scale : rawDt;
-    update(gameDt, rawDt);
+    let updateDt = sloMo ? rawDt * sloMo.scale : rawDt;
+    let camDt = rawDt;
+    if (plungeHitStop) {
+      plungeHitStop.timer -= rawDt;
+      updateDt *= plungeHitStop.scale;
+      camDt *= plungeHitStop.scale;
+      if (plungeHitStop.timer <= 0) plungeHitStop = null;
+    }
+    update(updateDt, camDt);
     draw();
     rafId = requestAnimationFrame(frame);
   }
@@ -1291,5 +1944,13 @@ window.CBGame = (function () {
     console.log("[CBGame] init OK");
   }
 
-  return { init, start, stop };
+  return {
+    init,
+    start,
+    stop,
+    setRemoteSnapshot: setRemoteSnapshot,
+    clearRemoteSnapshot: function () {
+      remoteGhost = null;
+    },
+  };
 })();

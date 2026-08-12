@@ -44,9 +44,13 @@ Username **Carrot** (password **Carrot** when registering) has **infinite coins*
 | russia | character | Russia | 8 |
 | wpn_deagle_gold | weapon | Gold Deagle | 10 |
 | wpn_katana_blue | weapon | Blue Katana | 10 |
+| wpn_katana_rainbow | weapon | Rainbow Katana | 8 |
 | wpn_absolut_ice | weapon | Ice Absolut | 10 |
 
-Gold Deagle card art: `code/assets/weapons/deagle_gold.png` (from `Weapons/Only via gatcha/`).
+Weapon card art:
+- Gold Deagle → `code/assets/weapons/deagle_gold.png`
+- Blue Katana → `code/assets/weapons/katana_blue.png`
+- Rainbow Katana → `code/assets/weapons/katana_rainbow.webp`
 
 ## Inventory
 
@@ -63,7 +67,7 @@ Stored on roster JSON (cloud + local):
 
 - Cosmetics: must own hat to equip (Countryballs picker greys locked).  
 - Characters: setup fighter buttons disabled until owned.  
-- Weapons: inventory only for now (no arena skin swap yet).
+- Weapons: unlock via gacha, then equip on Countryballs (fighter-locked). Gold Deagle, Blue Katana, and Rainbow Katana have arena art; Ice Absolut uses starter art until a PNG is added.
 
 ## Files
 

@@ -72,15 +72,19 @@ window.CBCountryballsUI = (function () {
       hat._aspect = aspect;
       const r = 90;
       const wPx = r * 2 * hat.scale;
+      const nudge =
+        CBCosmetics.fighterHatNudge
+          ? CBCosmetics.fighterHatNudge(selectedId)
+          : { ox: 0, oy: 0 };
       hatImg.style.width = wPx + "px";
       hatImg.style.height = "auto";
       hatImg.style.left = "50%";
       hatImg.style.top = "50%";
       hatImg.style.transform =
         "translate(-50%, -50%) translate(" +
-        hat.ox * r +
+        (hat.ox + nudge.ox) * r +
         "px, " +
-        hat.oy * r +
+        (hat.oy + nudge.oy) * r +
         "px)";
     }
     hatImg.classList.remove("screen-hidden");
@@ -137,9 +141,114 @@ window.CBCountryballsUI = (function () {
     });
   }
 
+  function renderWeaponPicker(currentWeaponId) {
+    const root = document.getElementById("cb-weapon-pick");
+    if (!root || !window.CBCosmetics || !selectedId) return;
+    root.innerHTML = "";
+    const list =
+      typeof CBCosmetics.listWeaponsForFighter === "function"
+        ? CBCosmetics.listWeaponsForFighter(selectedId)
+        : CBCosmetics.listWeapons();
+    list.forEach(function (wpn) {
+      const owned =
+        wpn.id === "none" ||
+        (window.CBCountryballs && CBCountryballs.ownsWeapon(wpn.id));
+      const selected =
+        wpn.id === "none"
+          ? !currentWeaponId || currentWeaponId === "none"
+          : wpn.id === currentWeaponId;
+      const preview =
+        wpn.id === "none"
+          ? null
+          : CBCosmetics.weaponPreviewSrc
+            ? CBCosmetics.weaponPreviewSrc(wpn)
+            : wpn.src || wpn.fallbackSrc;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className =
+        "cb-hat-btn" +
+        (selected ? " is-selected" : "") +
+        (owned ? "" : " is-locked");
+      btn.setAttribute("data-weapon-id", wpn.id);
+      btn.disabled = !owned;
+      btn.title = owned ? wpn.name : wpn.name + " — Unlock in Gacha";
+      if (preview) {
+        btn.innerHTML =
+          '<img src="' +
+          preview +
+          '" alt="' +
+          wpn.name +
+          '" />' +
+          "<span>" +
+          (owned ? wpn.name : "Locked") +
+          "</span>";
+      } else {
+        btn.innerHTML = "<span>Default</span>";
+      }
+      btn.addEventListener("click", function () {
+        if (!selectedId || !owned) return;
+        const id = wpn.id === "none" ? null : wpn.id;
+        CBCountryballs.setWeapon(selectedId, id);
+        renderDetail();
+      });
+      root.appendChild(btn);
+    });
+  }
+
+  function renderAuraPicker(currentEffectId) {
+    const root = document.getElementById("cb-aura-pick");
+    if (!root || !window.CBCosmetics || !selectedId) return;
+    if (!CBCosmetics.listEffects) return;
+    root.innerHTML = "";
+    CBCosmetics.listEffects().forEach(function (fx) {
+      const owned =
+        fx.id === "none" ||
+        (window.CBCountryballs && CBCountryballs.ownsEffect(fx.id));
+      const selected =
+        fx.id === "none"
+          ? !currentEffectId || currentEffectId === "none"
+          : fx.id === currentEffectId;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className =
+        "cb-hat-btn" +
+        (selected ? " is-selected" : "") +
+        (owned ? "" : " is-locked");
+      btn.setAttribute("data-effect-id", fx.id);
+      btn.disabled = !owned;
+      btn.title = owned ? fx.name : fx.name + " — Unlock later";
+      if (fx.id === "none") {
+        btn.innerHTML = "<span>Default</span>";
+      } else {
+        const swatch = fx.swatch || "#c62828";
+        btn.innerHTML =
+          '<span class="cb-aura-swatch" style="background:' +
+          swatch +
+          '"></span>' +
+          "<span>" +
+          (owned ? fx.name : "Locked") +
+          "</span>";
+      }
+      btn.addEventListener("click", function () {
+        if (!selectedId || !owned) return;
+        const id = fx.id === "none" ? null : fx.id;
+        CBCountryballs.setEffect(selectedId, id);
+        renderDetail();
+      });
+      root.appendChild(btn);
+    });
+  }
+
   function renderDetail() {
     if (!window.CBCountryballs || !selectedId) return;
     const ball = CBCountryballs.getBall(selectedId);
+    if (!ball || !ball.owned) {
+      console.warn(
+        "[CBCountryballsUI] renderDetail skipped unowned",
+        selectedId
+      );
+      return;
+    }
     const stats = CBCountryballs.computeStats(ball);
     if (!stats) return;
 
@@ -184,6 +293,8 @@ window.CBCountryballsUI = (function () {
 
     applyHatOverlay(stats.hatId);
     renderHatPicker(stats.hatId);
+    renderWeaponPicker(stats.weaponId);
+    renderAuraPicker(stats.effectId);
   }
 
   function show() {
@@ -193,7 +304,9 @@ window.CBCountryballsUI = (function () {
     }
     CBCountryballs.ensure();
     const owned = CBCountryballs.listOwned();
-    if (!selectedId || !CBCountryballs.getBall(selectedId)) {
+    const cur = selectedId ? CBCountryballs.getBall(selectedId) : null;
+    // Must be owned — getBall() still returns locked Japan/Russia stubs
+    if (!cur || !cur.owned) {
       selectedId = owned[0] ? owned[0].id : null;
     }
     const coinsEl = document.getElementById("cb-coins");
@@ -204,7 +317,16 @@ window.CBCountryballsUI = (function () {
     }
     renderRoster();
     renderDetail();
-    console.log("[CBCountryballsUI] show selected=" + selectedId);
+    console.log(
+      "[CBCountryballsUI] show selected=" +
+        selectedId +
+        " owned=" +
+        owned
+          .map(function (b) {
+            return b.id;
+          })
+          .join(",")
+    );
   }
 
   function init() {
@@ -229,5 +351,7 @@ window.CBCountryballsUI = (function () {
     console.log("[CBCountryballsUI] init OK");
   }
 
-  return { init, show, select, renderRoster, renderDetail };
+  return { init, show, select, renderRoster, renderDetail, clearSelection: function () {
+    selectedId = null;
+  } };
 })();

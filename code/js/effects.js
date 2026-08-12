@@ -169,6 +169,95 @@ window.CBEffects = (function () {
     console.log("[CBEffects] explosion at", Math.round(x), Math.round(y), "power=" + power);
   }
 
+  /** Expanding impact ring (plunge / heavy hits). */
+  function spawnShockwave(x, y, opts) {
+    const o = opts || {};
+    const life = o.life ?? 0.42;
+    return add({
+      type: "shockwave",
+      x,
+      y,
+      life,
+      maxLife: life,
+      radius: o.radius ?? 18,
+      maxRadius: o.maxRadius ?? 130,
+      color: o.color || "rgba(255,255,255,0.75)",
+      width: o.width ?? 3.5,
+    });
+  }
+
+  const WRATH_RED = ["#ff1a1a", "#ff4d4d", "#8b0000", "#ff6b6b", "#ffffff"];
+
+  /** Jagged red lightning bolts around a point (plunge / ambient). */
+  function spawnWrathLightning(x, y, opts) {
+    const o = opts || {};
+    const count = o.count ?? 3;
+    const colors = o.colors || WRATH_RED;
+    for (let i = 0; i < count; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const len = 40 + Math.random() * 70;
+      const segments = [];
+      let px = x + (Math.random() - 0.5) * 30;
+      let py = y - 20 - Math.random() * 50;
+      segments.push({ x: px, y: py });
+      const steps = 4 + Math.floor(Math.random() * 3);
+      for (let s = 0; s < steps; s++) {
+        px += Math.cos(ang) * (len / steps) + (Math.random() - 0.5) * 22;
+        py += Math.sin(ang) * (len / steps) + (Math.random() - 0.5) * 22;
+        segments.push({ x: px, y: py });
+      }
+      add({
+        type: "wrathBolt",
+        segments: segments,
+        life: 0.18 + Math.random() * 0.16,
+        maxLife: 0.28,
+        color: colors[i % colors.length],
+        width: 2 + Math.random() * 2,
+      });
+      spawnParticle(px, py, {
+        vx: (Math.random() - 0.5) * 80,
+        vy: (Math.random() - 0.5) * 80,
+        life: 0.2,
+        size: 2 + Math.random() * 2,
+        color: colors[0],
+      });
+    }
+  }
+
+  /**
+   * Finisher: 3 red lines cross foe, then callback (explode).
+   */
+  function spawnFinisherCross(opts) {
+    const o = opts || {};
+    const x = o.x ?? 0;
+    const y = o.y ?? 0;
+    const life = o.life ?? 0.38;
+    console.log("[CBEffects] Wrath finisher cross at", Math.round(x), Math.round(y));
+    return add({
+      type: "finisherCross",
+      x: x,
+      y: y,
+      life: life,
+      maxLife: life,
+      radius: o.radius ?? 48,
+      colors: o.colors || WRATH_RED,
+      onDone: o.onDone || null,
+      done: false,
+      angles: [-0.55, 0.15, 1.05],
+    });
+  }
+
+  function wrathTrailAt(x, y) {
+    spawnParticle(x, y, {
+      vx: (Math.random() - 0.5) * 40,
+      vy: -30 - Math.random() * 40,
+      life: 0.22 + Math.random() * 0.15,
+      size: 3 + Math.random() * 3,
+      color: WRATH_RED[Math.floor(Math.random() * 3)],
+      gravity: -20,
+    });
+  }
+
   /**
    * Melee pistol-whip: Deagle swings on the hand and smacks anything in reach.
    */
@@ -205,6 +294,7 @@ window.CBEffects = (function () {
       // Swing from raised to forward (radians offset from aim)
       swingFrom: o.swingFrom ?? -1.35,
       swingTo: o.swingTo ?? 0.25,
+      wrath: !!o.wrath,
     });
   }
 
@@ -252,6 +342,8 @@ window.CBEffects = (function () {
       handDist: o.handDist ?? 0.52, // fraction of body radius toward aim
       onFire: o.onFire || null,
       finisher: !!o.finisher,
+      wrath: !!o.wrath,
+      bulletColors: o.bulletColors || null,
     });
   }
 
@@ -314,7 +406,13 @@ window.CBEffects = (function () {
         vy: a.dy * (220 + Math.random() * 180) + (Math.random() - 0.5) * 50,
         life: 0.12 + Math.random() * 0.12,
         size: 2 + Math.random() * 3,
-        color: i % 2 ? "#f7d354" : "#fff7d6",
+        color: e.wrath
+          ? i % 2
+            ? "#ff1a1a"
+            : "#ff6b6b"
+          : i % 2
+            ? "#f7d354"
+            : "#fff7d6",
       });
     }
 
@@ -324,7 +422,7 @@ window.CBEffects = (function () {
       vy: a.dy * e.speed,
       life: 1.1,
       radius: e.bulletRadius,
-      colors: ["#f7d354", "#ffffff", "#888888"],
+      colors: e.bulletColors || ["#f7d354", "#ffffff", "#888888"],
       damage: e.damage,
       ownerId: e.ownerId,
       finisher: !!e.finisher,
@@ -431,6 +529,7 @@ window.CBEffects = (function () {
       swingFrom: o.swingFrom ?? -1.55,
       swingTo: o.swingTo ?? 0.45,
       silhouette: false,
+      wrath: !!o.wrath,
     });
   }
 
@@ -476,6 +575,7 @@ window.CBEffects = (function () {
       hit: false,
       finisher: !!o.finisher,
       thrust: 0,
+      wrath: !!o.wrath,
     });
   }
 
@@ -517,6 +617,7 @@ window.CBEffects = (function () {
       finisher: !!o.finisher,
       hit: false,
       swing: 0,
+      wrath: !!o.wrath,
     });
   }
 
@@ -569,6 +670,8 @@ window.CBEffects = (function () {
       maxLife: life,
       handDist: o.handDist ?? 0.45,
       tipDown: true,
+      trailColor: o.trailColor || "rgba(255,255,255,0.35)",
+      sparkColor: o.sparkColor || "#ffffff",
     });
   }
 
@@ -705,6 +808,9 @@ window.CBEffects = (function () {
         // Ease-in smash
         const eased = progress * progress;
         e.rot = a.ang + e.swingFrom + (e.swingTo - e.swingFrom) * eased;
+        if (e.wrath && Math.random() > 0.35) {
+          wrathTrailAt(e.handX, e.handY);
+        }
 
         // Impact window ~ mid-late swing
         if (!e.hit && progress >= 0.55) {
@@ -762,6 +868,9 @@ window.CBEffects = (function () {
           (e.rotOffset || 0) +
           e.swingFrom +
           (e.swingTo - e.swingFrom) * eased;
+        if (e.wrath && Math.random() > 0.35) {
+          wrathTrailAt(e.handX, e.handY);
+        }
 
         if (!e.hit && progress >= 0.5) {
           e.hit = true;
@@ -909,6 +1018,9 @@ window.CBEffects = (function () {
         }
         e.x = e.handX;
         e.y = e.handY;
+        if (e.wrath && Math.random() > 0.45) {
+          wrathTrailAt(e.handX, e.handY);
+        }
       }
 
       if (e.type === "vodkaBarrage") {
@@ -961,6 +1073,9 @@ window.CBEffects = (function () {
         }
         e.x = e.handX;
         e.y = e.handY;
+        if (e.wrath && Math.random() > 0.4) {
+          wrathTrailAt(e.handX, e.handY);
+        }
       }
 
       if (e.type === "drinkPose") {
@@ -983,6 +1098,22 @@ window.CBEffects = (function () {
           const lx = (e.muzzleX || 0) - (e.pivotX || 0);
           const ly = (e.muzzleY || 0) - (e.pivotY || 0);
           e.rot = Math.PI / 2 - Math.atan2(ly, lx);
+          if (Math.random() > 0.42) {
+            spawnTrail(p.x, p.y - p.radius * 0.2, {
+              life: 0.2,
+              size: p.radius * 0.75,
+              color: e.trailColor || "rgba(255,255,255,0.35)",
+            });
+          }
+          if (Math.random() > 0.55) {
+            spawnParticle(p.x + (Math.random() - 0.5) * p.radius, p.y, {
+              vx: (Math.random() - 0.5) * 60,
+              vy: 120 + Math.random() * 80,
+              life: 0.18,
+              size: 2 + Math.random() * 2,
+              color: e.sparkColor || "#ffffff",
+            });
+          }
         }
         e.x = e.handX;
         e.y = e.handY;
@@ -1143,6 +1274,9 @@ window.CBEffects = (function () {
 
         if (e.phase === "spin") {
           e.rot += e.spin * dt;
+          if (e.wrath && Math.random() > 0.4) {
+            wrathTrailAt(e.handX, e.handY);
+          }
           if (e.life <= 0) {
             // Snap to aim and shoot; keep gun for hold pose
             e.phase = "hold";
@@ -1202,6 +1336,10 @@ window.CBEffects = (function () {
         }
       }
 
+      if (e.type === "finisherCross") {
+        /* drawn only; onDone fires on expire */
+      }
+
       if (
         e.type === "particle" ||
         e.type === "projectile" ||
@@ -1246,6 +1384,16 @@ window.CBEffects = (function () {
       }
 
       if (e.life <= 0) {
+        if (e.type === "finisherCross" && !e.done) {
+          e.done = true;
+          if (typeof e.onDone === "function") {
+            try {
+              e.onDone(e);
+            } catch (err) {
+              console.warn("[CBEffects] finisherCross onDone", err);
+            }
+          }
+        }
         if (e.type === "japanUlt" && cinema) {
           cinema = null;
           console.log("[CBEffects] Japan cinema cleared on expire");
@@ -1371,6 +1519,53 @@ window.CBEffects = (function () {
           ctx.fillRect(-e.w / 2, -e.h / 2, e.w, e.h);
         }
         ctx.restore();
+      } else if (e.type === "wrathBolt") {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = e.color || "#ff1a1a";
+        ctx.lineWidth = e.width || 2.5;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.shadowColor = "#ff1a1a";
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        const segs = e.segments || [];
+        if (segs.length) {
+          ctx.moveTo(segs[0].x, segs[0].y);
+          for (let i = 1; i < segs.length; i++) {
+            ctx.lineTo(segs[i].x, segs[i].y);
+          }
+        }
+        ctx.stroke();
+        ctx.restore();
+      } else if (e.type === "finisherCross") {
+        const prog = 1 - Math.max(0, e.life) / (e.maxLife || 0.38);
+        const len = (e.radius || 48) * (0.6 + prog * 1.4);
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, alpha * 1.2);
+        ctx.lineCap = "round";
+        ctx.shadowColor = "#ff0000";
+        ctx.shadowBlur = 12;
+        (e.angles || []).forEach(function (ang, i) {
+          ctx.strokeStyle = (e.colors && e.colors[i % e.colors.length]) || "#ff1a1a";
+          ctx.lineWidth = 3 + i;
+          ctx.beginPath();
+          ctx.moveTo(e.x - Math.cos(ang) * len, e.y - Math.sin(ang) * len);
+          ctx.lineTo(e.x + Math.cos(ang) * len, e.y + Math.sin(ang) * len);
+          ctx.stroke();
+        });
+        ctx.restore();
+      } else if (e.type === "shockwave") {
+        const prog = 1 - Math.max(0, e.life) / (e.maxLife || 0.42);
+        const rr = e.radius + (e.maxRadius - e.radius) * prog;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, alpha * (1 - prog * 0.85));
+        ctx.strokeStyle = e.color || "rgba(255,255,255,0.75)";
+        ctx.lineWidth = e.width || 3.5;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, rr, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       }
     }
     ctx.globalAlpha = 1;
@@ -1385,6 +1580,9 @@ window.CBEffects = (function () {
     spawnStar,
     spawnBurst,
     spawnExplosion,
+    spawnShockwave,
+    spawnWrathLightning,
+    spawnFinisherCross,
     spawnDeagleSpin,
     spawnDeagleBash,
     spawnKatanaStrike,
@@ -1400,6 +1598,7 @@ window.CBEffects = (function () {
     getPrimaryFinisher,
     update,
     draw,
+    WRATH_RED,
     get list() {
       return list;
     },
