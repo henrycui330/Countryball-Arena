@@ -16,10 +16,20 @@
     if (name) name.textContent = loggedIn ? CBAuth.getUsername() || "—" : "—";
   }
 
-  function enterApp() {
+  function enterApp(opts) {
     hideAllOverlayScreens();
     syncTitleUser();
     window.CBMenu.show();
+    const startTut =
+      opts &&
+      opts.startTutorial &&
+      window.CBTutorial &&
+      CBTutorial.start;
+    if (startTut) {
+      setTimeout(function () {
+        CBTutorial.start({ force: true });
+      }, 280);
+    }
   }
 
   function showAuth() {
@@ -46,6 +56,9 @@
   function startGame(cfg) {
     if (window.CBAuth && !CBAuth.isLoggedIn()) {
       showAuth();
+      return;
+    }
+    if (window.CBTutorial && CBTutorial.isActive && CBTutorial.isActive()) {
       return;
     }
     if (window.CBWinCelebration) window.CBWinCelebration.stop();
@@ -117,13 +130,15 @@
     onMatchEnd: onMatchEnd,
   });
   window.CBAuthUI.init({
-    onReady: function () {
-      enterApp();
+    onReady: function (result) {
+      enterApp({
+        startTutorial: !!(result && result.isNewAccount),
+      });
     },
   });
 
   if (window.CBMultiplayerUI && CBMultiplayerUI.init) {
-    CBMultiplayerUI.init();
+    CBMultiplayerUI.init({ onStartMatch: startGame });
   }
 
   const winMenu = document.getElementById("btn-win-menu");
@@ -136,6 +151,17 @@
   const logoutBtn = document.getElementById("btn-logout");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", async function () {
+      if (window.CBCountryballsUI && CBCountryballsUI.clearSelection) {
+        CBCountryballsUI.clearSelection();
+      }
+      if (window.CBAuth) await CBAuth.logout();
+      showAuth();
+    });
+  }
+
+  const settingsLogout = document.getElementById("btn-settings-logout");
+  if (settingsLogout) {
+    settingsLogout.addEventListener("click", async function () {
       if (window.CBCountryballsUI && CBCountryballsUI.clearSelection) {
         CBCountryballsUI.clearSelection();
       }

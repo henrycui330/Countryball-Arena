@@ -250,7 +250,7 @@ window.CBAuth = (function () {
     }
     notify();
     console.log("[CBAuth] registered", username);
-    return { ok: true, username: String(username).trim() };
+    return { ok: true, username: String(username).trim(), isNewAccount: true };
   }
 
   async function login(username, password) {
@@ -277,7 +277,7 @@ window.CBAuth = (function () {
     await hydrateCountryballsFromCloud();
     notify();
     console.log("[CBAuth] login", getUsername());
-    return { ok: true, username: getUsername() };
+    return { ok: true, username: getUsername(), isNewAccount: false };
   }
 
   async function logout() {

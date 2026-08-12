@@ -7,9 +7,9 @@ const HEARTBEAT_MS = 15000;
 
 const wss = new WebSocketServer({ port: PORT });
 
-/** @type {Map<string, { code: string, members: Set<any>, createdAt: number }>} */
+/** @type {Map<string, { code: string, members: Set<any>, mapId: string, started: boolean, createdAt: number }>} */
 const rooms = new Map();
-/** @type {Map<any, { id: string, roomCode: string|null, isAlive: boolean }>} */
+/** @type {Map<any, { id: string, roomCode: string|null, isAlive: boolean, ready: boolean, fighter: string, name: string }>} */
 const peers = new Map();
 
 function send(ws, type, payload = {}) {
@@ -17,15 +17,26 @@ function send(ws, type, payload = {}) {
   ws.send(JSON.stringify({ type, payload }));
 }
 
+function hostSocket(room) {
+  for (const member of room.members) return member;
+  return null;
+}
+
 function roomPlayers(room) {
   const players = [];
+  let i = 0;
   room.members.forEach((member) => {
     const p = peers.get(member);
     if (!p) return;
     players.push({
       id: p.id,
-      isHost: room.members.values().next().value === member,
+      name: p.name || "Player",
+      fighter: p.fighter || "usa",
+      ready: !!p.ready,
+      isHost: i === 0,
+      slot: i + 1,
     });
+    i += 1;
   });
   return players;
 }
@@ -36,6 +47,8 @@ function broadcastRoomState(room, reason) {
     reason: reason || "update",
     players: roomPlayers(room),
     capacity: ROOM_CAPACITY,
+    mapId: room.mapId,
+    started: !!room.started,
   };
   room.members.forEach((member) => send(member, "room_state", payload));
 }
@@ -53,6 +66,7 @@ function removeFromRoom(ws, reason) {
   if (!peer || !peer.roomCode) return;
   const room = rooms.get(peer.roomCode);
   peer.roomCode = null;
+  peer.ready = false;
   if (!room) return;
 
   room.members.delete(ws);
@@ -60,6 +74,7 @@ function removeFromRoom(ws, reason) {
     rooms.delete(room.code);
     return;
   }
+  room.started = false;
   broadcastRoomState(room, reason || "leave");
 }
 
@@ -71,7 +86,7 @@ function uniqueRoomCode() {
   throw new Error("Room code generation exhausted");
 }
 
-function handleCreateRoom(ws) {
+function handleCreateRoom(ws, payload) {
   const peer = peers.get(ws);
   if (!peer) return;
 
@@ -80,10 +95,19 @@ function handleCreateRoom(ws) {
   const room = {
     code,
     members: new Set([ws]),
+    mapId: payload?.mapId === "icy" ? "icy" : "plains",
+    started: false,
     createdAt: Date.now(),
   };
   rooms.set(code, room);
   peer.roomCode = code;
+  peer.ready = false;
+  if (payload?.fighter === "usa" || payload?.fighter === "japan" || payload?.fighter === "russia") {
+    peer.fighter = payload.fighter;
+  }
+  if (typeof payload?.name === "string" && payload.name.trim()) {
+    peer.name = String(payload.name).trim().slice(0, 16);
+  }
 
   send(ws, "room_created", { code, playerId: peer.id });
   broadcastRoomState(room, "create");
@@ -93,24 +117,35 @@ function handleCreateRoom(ws) {
 function handleJoinRoom(ws, payload) {
   const peer = peers.get(ws);
   if (!peer) return;
-  const code = String(payload?.code || "").trim().toUpperCase();
-  if (!code) {
-    send(ws, "error", { message: "Missing room code." });
+  const code = String(payload?.code || "").trim();
+  if (!/^\d{5}$/.test(code)) {
+    send(ws, "error", { message: "Enter a 5-digit room code." });
     return;
   }
   const room = rooms.get(code);
   if (!room) {
-    send(ws, "error", { message: "Room not found." });
+    send(ws, "error", { message: "Room not found. Ask the host for a new code." });
+    return;
+  }
+  if (room.started) {
+    send(ws, "error", { message: "Match already started." });
     return;
   }
   if (room.members.size >= ROOM_CAPACITY) {
-    send(ws, "error", { message: "Room is full." });
+    send(ws, "error", { message: "Room is full (max 4)." });
     return;
   }
 
   removeFromRoom(ws, "switch_room");
   room.members.add(ws);
   peer.roomCode = code;
+  peer.ready = false;
+  if (payload?.fighter === "usa" || payload?.fighter === "japan" || payload?.fighter === "russia") {
+    peer.fighter = payload.fighter;
+  }
+  if (typeof payload?.name === "string" && payload.name.trim()) {
+    peer.name = String(payload.name).trim().slice(0, 16);
+  }
   send(ws, "room_joined", { code, playerId: peer.id });
   broadcastRoomState(room, "join");
   console.log("[WS] room joined", code, "peer=", peer.id);
@@ -119,6 +154,71 @@ function handleJoinRoom(ws, payload) {
 function handleLeaveRoom(ws) {
   removeFromRoom(ws, "leave");
   send(ws, "left_room", {});
+}
+
+function handleReady(ws, payload) {
+  const peer = peers.get(ws);
+  if (!peer || !peer.roomCode) {
+    send(ws, "error", { message: "Join a room first." });
+    return;
+  }
+  if (typeof payload?.ready === "boolean") peer.ready = payload.ready;
+  else peer.ready = !peer.ready;
+  const room = rooms.get(peer.roomCode);
+  if (room) broadcastRoomState(room, "ready");
+}
+
+function handleSetLoadout(ws, payload) {
+  const peer = peers.get(ws);
+  if (!peer) return;
+  if (payload?.fighter === "usa" || payload?.fighter === "japan" || payload?.fighter === "russia") {
+    peer.fighter = payload.fighter;
+  }
+  if (typeof payload?.name === "string" && payload.name.trim()) {
+    peer.name = String(payload.name).trim().slice(0, 16);
+  }
+  if (!peer.roomCode) return;
+  const room = rooms.get(peer.roomCode);
+  if (!room || room.started) return;
+  if ((payload?.mapId === "plains" || payload?.mapId === "icy") && hostSocket(room) === ws) {
+    room.mapId = payload.mapId;
+  }
+  broadcastRoomState(room, "loadout");
+}
+
+function handleStartMatch(ws, payload) {
+  const peer = peers.get(ws);
+  if (!peer || !peer.roomCode) {
+    send(ws, "error", { message: "Join a room first." });
+    return;
+  }
+  const room = rooms.get(peer.roomCode);
+  if (!room) return;
+  if (hostSocket(room) !== ws) {
+    send(ws, "error", { message: "Only the host can start." });
+    return;
+  }
+  if (room.members.size < 2) {
+    send(ws, "error", { message: "Need at least 2 players." });
+    return;
+  }
+  if (payload?.mapId === "plains" || payload?.mapId === "icy") {
+    room.mapId = payload.mapId;
+  }
+  room.started = true;
+  room.members.forEach((member) => {
+    const p = peers.get(member);
+    if (p) p.ready = true;
+  });
+  const startPayload = {
+    code: room.code,
+    mapId: room.mapId,
+    players: roomPlayers(room),
+    seed: Date.now() % 100000,
+  };
+  room.members.forEach((member) => send(member, "start_match", startPayload));
+  broadcastRoomState(room, "start");
+  console.log("[WS] start_match", room.code);
 }
 
 function handleMessage(ws, raw) {
@@ -132,18 +232,13 @@ function handleMessage(ws, raw) {
   const type = msg?.type;
   const payload = msg?.payload || {};
 
-  if (type === "create_room") return handleCreateRoom(ws);
+  if (type === "create_room") return handleCreateRoom(ws, payload);
   if (type === "join_room") return handleJoinRoom(ws, payload);
   if (type === "leave_room") return handleLeaveRoom(ws);
-  if (type === "ready") {
-    const peer = peers.get(ws);
-    if (!peer || !peer.roomCode) return;
-    const room = rooms.get(peer.roomCode);
-    if (!room) return;
-    broadcastRoomState(room, "ready");
-    return;
-  }
-  if (type === "state" || type === "input") {
+  if (type === "ready") return handleReady(ws, payload);
+  if (type === "set_loadout") return handleSetLoadout(ws, payload);
+  if (type === "start_match") return handleStartMatch(ws, payload);
+  if (type === "state" || type === "input" || type === "hit") {
     const peer = peers.get(ws);
     if (!peer || !peer.roomCode) return;
     const room = rooms.get(peer.roomCode);
@@ -156,7 +251,14 @@ function handleMessage(ws, raw) {
 
 wss.on("connection", (ws) => {
   const id = randomUUID();
-  peers.set(ws, { id, roomCode: null, isAlive: true });
+  peers.set(ws, {
+    id,
+    roomCode: null,
+    isAlive: true,
+    ready: false,
+    fighter: "usa",
+    name: "Player",
+  });
   send(ws, "hello", { playerId: id });
   console.log("[WS] connect", id);
 

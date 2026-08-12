@@ -7,6 +7,9 @@ window.CBNetClient = (function () {
     roomCode: null,
   };
   let handlers = {};
+  let reconnectTimer = 0;
+  let wantUrl = null;
+  let pendingAction = null; // { kind: 'create'|'join', payload, code? }
 
   function emit(name, payload) {
     const fn = handlers && handlers[name];
@@ -19,33 +22,104 @@ window.CBNetClient = (function () {
 
   function send(type, payload) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-    ws.send(JSON.stringify({ type: type, payload: payload || {} }));
-    return true;
+    try {
+      ws.send(JSON.stringify({ type: type, payload: payload || {} }));
+      return true;
+    } catch (err) {
+      console.warn("[CBNetClient] send failed", err);
+      return false;
+    }
+  }
+
+  function flushPending() {
+    if (!pendingAction || !state.connected) return;
+    const action = pendingAction;
+    pendingAction = null;
+    let ok = false;
+    if (action.kind === "create") {
+      ok = send("create_room", action.payload || {});
+      console.log("[CBNetClient] pending create_room", ok);
+    } else if (action.kind === "join") {
+      ok = send(
+        "join_room",
+        Object.assign({}, action.payload || {}, { code: String(action.code || "").trim() })
+      );
+      console.log("[CBNetClient] pending join_room", ok, action.code);
+    }
+    if (!ok) {
+      emit("status", {
+        ok: false,
+        message: "Could not send — still connecting",
+        state: Object.assign({}, state),
+      });
+    }
   }
 
   function connect(url) {
-    if (ws && ws.readyState <= WebSocket.OPEN) {
+    wantUrl = url || wantUrl;
+    if (!wantUrl) {
+      console.warn("[CBNetClient] connect missing url");
+      return;
+    }
+
+    // Already online on the same URL — keep socket.
+    if (
+      ws &&
+      ws.readyState === WebSocket.OPEN &&
+      state.url === wantUrl &&
+      state.connected
+    ) {
+      flushPending();
+      return;
+    }
+
+    // Already connecting to same URL — wait.
+    if (ws && ws.readyState === WebSocket.CONNECTING && state.url === wantUrl) {
+      console.log("[CBNetClient] already connecting", wantUrl);
+      return;
+    }
+
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
       try {
         ws.close();
       } catch (_) {}
     }
-    state.url = url;
-    ws = new WebSocket(url);
+
+    state.url = wantUrl;
+    state.connected = false;
+    console.log("[CBNetClient] connecting", wantUrl);
+    ws = new WebSocket(wantUrl);
 
     ws.addEventListener("open", function () {
       state.connected = true;
-      emit("status", { ok: true, message: "Connected", state: Object.assign({}, state) });
+      console.log("[CBNetClient] open");
+      emit("status", { ok: true, message: "Online", state: Object.assign({}, state) });
+      flushPending();
     });
 
-    ws.addEventListener("close", function () {
+    ws.addEventListener("close", function (ev) {
       state.connected = false;
       state.playerId = null;
       state.roomCode = null;
-      emit("status", { ok: false, message: "Disconnected", state: Object.assign({}, state) });
+      console.warn("[CBNetClient] close", ev && ev.code, ev && ev.reason);
+      emit("status", {
+        ok: false,
+        message: "Offline — retrying…",
+        state: Object.assign({}, state),
+      });
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(function () {
+        if (wantUrl) connect(wantUrl);
+      }, 1800);
     });
 
     ws.addEventListener("error", function () {
-      emit("status", { ok: false, message: "Socket error", state: Object.assign({}, state) });
+      console.warn("[CBNetClient] socket error", wantUrl);
+      emit("status", {
+        ok: false,
+        message: "Connection problem (check VPN / Clash for workers.dev)",
+        state: Object.assign({}, state),
+      });
     });
 
     ws.addEventListener("message", function (event) {
@@ -60,6 +134,7 @@ window.CBNetClient = (function () {
       const payload = (msg && msg.payload) || {};
       if (type === "hello") {
         state.playerId = payload.playerId || null;
+        console.log("[CBNetClient] hello", state.playerId);
       }
       if (type === "room_created" || type === "room_joined" || type === "room_state") {
         state.roomCode = payload.code || state.roomCode;
@@ -72,6 +147,10 @@ window.CBNetClient = (function () {
   }
 
   function disconnect() {
+    wantUrl = null;
+    pendingAction = null;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = 0;
     if (!ws) return;
     try {
       ws.close();
@@ -79,19 +158,36 @@ window.CBNetClient = (function () {
   }
 
   function createRoom(extra) {
-    return send("create_room", extra || {});
+    if (send("create_room", extra || {})) return true;
+    pendingAction = { kind: "create", payload: extra || {} };
+    connect(wantUrl || state.url);
+    return false;
   }
 
-  function joinRoom(code) {
-    return send("join_room", { code: String(code || "").trim().toUpperCase() });
+  function joinRoom(code, extra) {
+    const payload = Object.assign({}, extra || {}, { code: String(code || "").trim() });
+    if (send("join_room", payload)) return true;
+    pendingAction = { kind: "join", code: payload.code, payload: extra || {} };
+    connect(wantUrl || state.url);
+    return false;
   }
 
   function leaveRoom() {
     return send("leave_room", {});
   }
 
-  function ready() {
-    return send("ready", {});
+  function ready(readyFlag) {
+    const payload = {};
+    if (typeof readyFlag === "boolean") payload.ready = readyFlag;
+    return send("ready", payload);
+  }
+
+  function setLoadout(extra) {
+    return send("set_loadout", extra || {});
+  }
+
+  function startMatch(extra) {
+    return send("start_match", extra || {});
   }
 
   function sendState(snapshot) {
@@ -100,6 +196,10 @@ window.CBNetClient = (function () {
 
   function sendInput(frame) {
     return send("input", frame || {});
+  }
+
+  function sendHit(hit) {
+    return send("hit", hit || {});
   }
 
   function getState() {
@@ -114,8 +214,11 @@ window.CBNetClient = (function () {
     joinRoom: joinRoom,
     leaveRoom: leaveRoom,
     ready: ready,
+    setLoadout: setLoadout,
+    startMatch: startMatch,
     sendState: sendState,
     sendInput: sendInput,
+    sendHit: sendHit,
     getState: getState,
   };
 })();

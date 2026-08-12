@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Countryball PVP — Version 1.2</title>
+  <title>Countryball PVP — Version 1.3</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet" />
@@ -103,24 +103,12 @@
               <button type="button" class="title-nav-btn title-nav-btn-multi" id="nav-multiplayer">
                 Multiplayer
               </button>
+              <button type="button" class="title-nav-btn title-nav-btn-settings" id="nav-settings">
+                Settings
+              </button>
             </nav>
-            <section id="mp-panel" class="mp-panel screen-hidden" aria-label="Multiplayer">
-              <p class="mp-title">Multiplayer</p>
-              <p class="mp-sub">Host room -> share 5-digit code -> friends join.</p>
-              <p id="mp-status" class="mp-status">Connecting…</p>
-              <div class="mp-row">
-                <button type="button" id="mp-host" class="menu-btn mp-btn">Host Room</button>
-                <input id="mp-code" class="mp-input mp-code" type="text" maxlength="5" placeholder="12345" />
-                <button type="button" id="mp-join" class="menu-btn mp-btn mp-btn-alt">Join</button>
-              </div>
-              <div class="mp-row">
-                <button type="button" id="mp-ready" class="menu-btn mp-btn">Ready</button>
-                <button type="button" id="mp-leave" class="menu-btn mp-btn mp-btn-alt">Leave Room</button>
-              </div>
-              <p id="mp-room" class="mp-room">Room: —</p>
-            </section>
             <p class="menu-foot">USA · Japan · Russia · WASD · LMB · E · Q</p>
-            <p class="menu-version" id="game-version">Version 1.2</p>
+            <p class="menu-version" id="game-version">Version 1.3</p>
           </div>
           <div class="title-hero" aria-hidden="true">
             <img class="title-hero-img" id="title-hero-img" src="assets/usa.png" alt="" width="280" height="280" />
@@ -255,6 +243,127 @@
       </div>
     </section>
 
+    <section id="screen-multiplayer" class="screen screen-hidden" aria-label="Multiplayer">
+      <div class="mp-page">
+        <header class="mp-page-top">
+          <button type="button" id="btn-back-multiplayer" class="cb-back">← Title</button>
+          <h1 class="mp-page-title">Multiplayer</h1>
+          <p id="mp-online-badge" class="mp-online-badge">Connecting…</p>
+        </header>
+        <p class="mp-page-lead">
+          Host a room, share the 5-digit code, friends join. No server links.
+        </p>
+        <p id="mp-status" class="mp-status">Connecting…</p>
+
+        <div id="mp-panel-home" class="mp-card">
+          <h2 class="mp-card-title">Play with friends</h2>
+          <p class="mp-card-sub">Up to 4 players · same map · room code join</p>
+          <div class="mp-home-actions">
+            <button type="button" id="mp-host" class="menu-btn menu-btn-primary mp-big-btn">
+              Host a Room
+            </button>
+            <button type="button" id="mp-open-join" class="menu-btn mp-big-btn">
+              Join with Code
+            </button>
+          </div>
+          <div class="mp-pick-block">
+            <p class="mode-label">Your fighter</p>
+            <div class="mode-pick" role="group" aria-label="Fighter">
+              <button type="button" class="mode-btn is-selected" data-mp-fighter="usa">USA</button>
+              <button type="button" class="mode-btn" data-mp-fighter="japan">Japan</button>
+              <button type="button" class="mode-btn" data-mp-fighter="russia">Russia</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="mp-panel-join" class="mp-card screen-hidden">
+          <h2 class="mp-card-title">Join a room</h2>
+          <p class="mp-card-sub">Type the 5-digit code from the host</p>
+          <input
+            id="mp-code"
+            class="mp-code-input"
+            type="text"
+            inputmode="numeric"
+            maxlength="5"
+            placeholder="12345"
+            autocomplete="off"
+            aria-label="Room code"
+          />
+          <div class="mp-home-actions">
+            <button type="button" id="mp-join" class="menu-btn menu-btn-primary mp-big-btn">Join</button>
+            <button type="button" id="mp-join-back" class="menu-btn mp-big-btn">Back</button>
+          </div>
+        </div>
+
+        <div id="mp-panel-lobby" class="mp-card screen-hidden">
+          <p class="mode-label">Room code</p>
+          <p id="mp-code-display" class="mp-code-display">— — — — —</p>
+          <p id="mp-host-hint" class="mp-card-sub">Share this code with friends</p>
+          <div class="mp-home-actions">
+            <button type="button" id="mp-copy-code" class="menu-btn mp-big-btn">Copy Code</button>
+            <button type="button" id="mp-leave" class="menu-btn mp-big-btn">Leave</button>
+          </div>
+
+          <div class="mp-lobby-grid">
+            <div>
+              <p class="mode-label">Players</p>
+              <div id="mp-player-list" class="mp-player-list" aria-live="polite"></div>
+            </div>
+            <div>
+              <div class="mp-pick-block">
+                <p class="mode-label">Your fighter</p>
+                <div class="mode-pick" role="group" aria-label="Fighter">
+                  <button type="button" class="mode-btn is-selected" data-mp-fighter="usa">USA</button>
+                  <button type="button" class="mode-btn" data-mp-fighter="japan">Japan</button>
+                  <button type="button" class="mode-btn" data-mp-fighter="russia">Russia</button>
+                </div>
+              </div>
+              <div class="mp-pick-block">
+                <p class="mode-label">Map (host)</p>
+                <div class="mode-pick" role="group" aria-label="Map">
+                  <button type="button" class="mode-btn is-selected" data-mp-map="plains">Plains</button>
+                  <button type="button" class="mode-btn" data-mp-map="icy">Icy</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mp-home-actions mp-lobby-actions">
+            <button type="button" id="mp-ready" class="menu-btn mp-big-btn">I'm Ready</button>
+            <button type="button" id="mp-start" class="menu-btn menu-btn-primary mp-big-btn">
+              Start Fight
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-settings" class="screen screen-hidden" aria-label="Settings">
+      <div class="settings-page">
+        <header class="settings-top">
+          <button type="button" id="btn-back-settings" class="cb-back">← Title</button>
+          <h1 class="settings-title">Settings</h1>
+        </header>
+        <p class="settings-lead">Account options and help.</p>
+        <div class="settings-card">
+          <h2 class="settings-card-title">Tutorial</h2>
+          <p class="settings-card-sub">
+            Replay the guided tour of Quick Match, Countryballs, Gacha, and Multiplayer.
+          </p>
+          <button type="button" id="btn-replay-tutorial" class="menu-btn menu-btn-primary">
+            Replay tutorial
+          </button>
+        </div>
+        <div class="settings-card">
+          <h2 class="settings-card-title">Account</h2>
+          <p class="settings-card-sub">
+            Signed in as <strong id="settings-username">—</strong>
+          </p>
+          <button type="button" id="btn-settings-logout" class="menu-btn">Log out</button>
+        </div>
+      </div>
+    </section>
+
     <section id="screen-gacha" class="screen screen-hidden" aria-label="Gacha">
       <div class="gacha-layout">
         <header class="gacha-top">
@@ -322,6 +431,7 @@
   <script src="js/net/protocol.js"></script>
   <script src="js/net/client.js"></script>
   <script src="js/multiplayer-ui.js"></script>
+  <script src="js/tutorial.js"></script>
   <script src="js/countryballs-ui.js"></script>
   <script src="js/menu.js"></script>
   <script src="js/game.js"></script>

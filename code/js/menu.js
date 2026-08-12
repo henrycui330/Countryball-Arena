@@ -7,7 +7,7 @@ window.CBMenu = (function () {
     mapId: "plains",
     lives: 3,
     fighter: "usa",
-    view: "title", // title | setup | countryballs | gacha
+    view: "title", // title | setup | countryballs | gacha | multiplayer | settings
   };
 
   const MATCH_DESC = {
@@ -45,6 +45,19 @@ window.CBMenu = (function () {
     if (balls) balls.classList.add("screen-hidden");
   }
 
+  function hideMultiplayerScreen() {
+    if (window.CBMultiplayerUI && CBMultiplayerUI.hide) CBMultiplayerUI.hide();
+    else {
+      const mp = document.getElementById("screen-multiplayer");
+      if (mp) mp.classList.add("screen-hidden");
+    }
+  }
+
+  function hideSettingsScreen() {
+    const s = document.getElementById("screen-settings");
+    if (s) s.classList.add("screen-hidden");
+  }
+
   function show() {
     const menu = document.getElementById("screen-menu");
     const game = document.getElementById("screen-game");
@@ -52,6 +65,8 @@ window.CBMenu = (function () {
     const win = document.getElementById("screen-win");
     hideGachaScreen();
     hideCountryballsScreen();
+    hideMultiplayerScreen();
+    hideSettingsScreen();
     if (menu) menu.classList.remove("screen-hidden");
     if (game) game.classList.add("screen-hidden");
     if (result) result.classList.add("screen-hidden");
@@ -65,6 +80,8 @@ window.CBMenu = (function () {
     if (menu) menu.classList.add("screen-hidden");
     hideGachaScreen();
     hideCountryballsScreen();
+    hideMultiplayerScreen();
+    hideSettingsScreen();
   }
 
   function hideAllViews() {
@@ -78,6 +95,8 @@ window.CBMenu = (function () {
     state.view = "title";
     hideGachaScreen();
     hideCountryballsScreen();
+    hideMultiplayerScreen();
+    hideSettingsScreen();
     hideAllViews();
     const menu = document.getElementById("screen-menu");
     if (menu) menu.classList.remove("screen-hidden");
@@ -92,6 +111,8 @@ window.CBMenu = (function () {
     state.view = "setup";
     hideGachaScreen();
     hideCountryballsScreen();
+    hideMultiplayerScreen();
+    hideSettingsScreen();
     hideAllViews();
     const menu = document.getElementById("screen-menu");
     if (menu) menu.classList.remove("screen-hidden");
@@ -109,6 +130,8 @@ window.CBMenu = (function () {
   function showCountryballs() {
     state.view = "countryballs";
     hideGachaScreen();
+    hideMultiplayerScreen();
+    hideSettingsScreen();
     hideAllViews();
     const menu = document.getElementById("screen-menu");
     if (menu) menu.classList.add("screen-hidden");
@@ -121,6 +144,8 @@ window.CBMenu = (function () {
   function showGacha() {
     state.view = "gacha";
     hideCountryballsScreen();
+    hideMultiplayerScreen();
+    hideSettingsScreen();
     hideAllViews();
     const menu = document.getElementById("screen-menu");
     if (menu) menu.classList.add("screen-hidden");
@@ -128,6 +153,36 @@ window.CBMenu = (function () {
     if (gacha) gacha.classList.remove("screen-hidden");
     if (window.CBGachaUI) CBGachaUI.show();
     console.log("[CBMenu] gacha view");
+  }
+
+  function showMultiplayer() {
+    state.view = "multiplayer";
+    hideGachaScreen();
+    hideCountryballsScreen();
+    hideSettingsScreen();
+    hideAllViews();
+    const menu = document.getElementById("screen-menu");
+    if (menu) menu.classList.add("screen-hidden");
+    if (window.CBMultiplayerUI && CBMultiplayerUI.show) CBMultiplayerUI.show();
+    console.log("[CBMenu] multiplayer screen");
+  }
+
+  function showSettings() {
+    state.view = "settings";
+    hideGachaScreen();
+    hideCountryballsScreen();
+    hideMultiplayerScreen();
+    hideAllViews();
+    const menu = document.getElementById("screen-menu");
+    if (menu) menu.classList.add("screen-hidden");
+    const settings = document.getElementById("screen-settings");
+    if (settings) settings.classList.remove("screen-hidden");
+    const uname = document.getElementById("settings-username");
+    if (uname) {
+      uname.textContent =
+        window.CBAuth && CBAuth.getUsername ? CBAuth.getUsername() || "—" : "—";
+    }
+    console.log("[CBMenu] settings screen");
   }
 
   function syncButtons(attr, value) {
@@ -275,6 +330,43 @@ window.CBMenu = (function () {
       });
     }
 
+    const navMp = document.getElementById("nav-multiplayer");
+    if (navMp) {
+      navMp.addEventListener("click", function () {
+        showMultiplayer();
+      });
+    }
+
+    const backMp = document.getElementById("btn-back-multiplayer");
+    if (backMp) {
+      backMp.addEventListener("click", function () {
+        showTitle();
+      });
+    }
+
+    const navSettings = document.getElementById("nav-settings");
+    if (navSettings) {
+      navSettings.addEventListener("click", function () {
+        showSettings();
+      });
+    }
+
+    const backSettings = document.getElementById("btn-back-settings");
+    if (backSettings) {
+      backSettings.addEventListener("click", function () {
+        showTitle();
+      });
+    }
+
+    const replayTut = document.getElementById("btn-replay-tutorial");
+    if (replayTut) {
+      replayTut.addEventListener("click", function () {
+        if (window.CBTutorial && CBTutorial.start) {
+          CBTutorial.start({ force: true });
+        }
+      });
+    }
+
     if (window.CBCountryballsUI) CBCountryballsUI.init();
     if (window.CBGachaUI) CBGachaUI.init();
 
@@ -340,6 +432,8 @@ window.CBMenu = (function () {
     showSetup,
     showCountryballs,
     showGacha,
+    showMultiplayer,
+    showSettings,
     setOpponent,
     setMap,
     setFighter,

@@ -1,77 +1,40 @@
-# Cloudflare Multiplayer Setup
+# Multiplayer (kids-friendly)
 
-This is the free deployment path for Countryball Arena multiplayer.
+## Play
 
-## What you get
+1. Open the game (GitHub Pages or local).
+2. Title → **Multiplayer** (its own page).
+3. One player: **Host a Room** → share the big **5-digit code**.
+4. Friends: **Join with Code** → type the code.
+5. Pick fighter → **I'm Ready** → host presses **Start Fight**.
 
-- WebSocket multiplayer endpoint on Cloudflare Workers
-- Durable Object room server
-- Up to 4 players per room
-- No local Node server required
+No server URL pasting. The game already points at the Cloudflare Worker.
 
-## One-time setup
+## Live server
 
-1. Open a terminal
-2. Go to the server folder:
+- Health: `https://countryball-arena-multiplayer.henrycui330.workers.dev/health`
+- WebSocket: `wss://countryball-arena-multiplayer.henrycui330.workers.dev/ws`
 
-```bash
-cd "/Users/cheesydonut/Documents/Countryball PVP/code/server"
-```
-
-3. Install dependencies:
+## Local server (optional)
 
 ```bash
+cd code/server
 npm install
+npm run start
 ```
 
-4. Log in to Cloudflare:
+Uses `ws://localhost:8080` when the game is opened on localhost **and** `FIXED_MULTIPLAYER_WS_URL` is empty. Production builds keep the Cloudflare URL.
+
+## Redeploy Worker
 
 ```bash
-npx wrangler login
-```
-
-This opens a browser window. Approve it.
-
-## Deploy
-
-From the same `code/server` folder, run:
-
-```bash
+cd code/server
 npm run cf:deploy
 ```
 
-When deploy finishes, Cloudflare prints a URL like:
-
-```text
-https://countryball-arena-multiplayer.<your-subdomain>.workers.dev
-```
-
-## Put it into the game
-
-1. Open the game
-2. Click `Multiplayer`
-3. In `Server URL`, paste:
-
-```text
-wss://countryball-arena-multiplayer.<your-subdomain>.workers.dev/ws
-```
-
-4. Click `Connect`
-5. Player 1 clicks `Host Room`
-6. Player 2 pastes the room code and clicks `Join`
-
-## Useful checks
-
-Health URL:
-
-```text
-https://countryball-arena-multiplayer.<your-subdomain>.workers.dev/health
-```
-
-It should return JSON with `"ok": true`.
-
 ## Notes
 
-- The current room capacity is 4.
-- Current multiplayer implementation supports lobby + presence + remote state relay foundations.
-- Full multiplayer combat still depends on later sync/combat steps.
+- Max **4** players per room.
+- Host picks the map.
+- Combat is peer-relayed (position + hit events). Expect casual sync, not tournament netcode.
+- If `workers.dev` fails to load, turn off Clash/VPN fake-IP for `*.workers.dev`.

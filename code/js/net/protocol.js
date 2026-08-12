@@ -1,6 +1,5 @@
 window.CBNetProtocol = (function () {
   // Set this once for production so players never need to paste URLs.
-  // Example: "wss://countryball-arena-multiplayer.yourname.workers.dev/ws"
   const FIXED_MULTIPLAYER_WS_URL =
     "wss://countryball-arena-multiplayer.henrycui330.workers.dev/ws";
 
@@ -15,6 +14,11 @@ window.CBNetProtocol = (function () {
     JOIN_ROOM: "join_room",
     LEAVE_ROOM: "leave_room",
     READY: "ready",
+    SET_LOADOUT: "set_loadout",
+    START_MATCH: "start_match",
+    STATE: "state",
+    INPUT: "input",
+    HIT: "hit",
   };
 
   function defaultWsUrl() {

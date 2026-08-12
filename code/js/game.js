@@ -66,6 +66,8 @@ window.CBGame = (function () {
   let auraAmbientTimer = 0;
   let netSendTimer = 0;
   let remoteGhost = null;
+  let mpFoe = null;
+  let mpPendingHit = 0;
 
   function playerHasWrath() {
     return !!(
@@ -151,8 +153,10 @@ window.CBGame = (function () {
 
   function normalizeConfig(cfg) {
     const c = cfg || {};
-    const opponent =
-      c.opponent === "hard"
+    const isMp = c.matchType === "multiplayer" || c.opponent === "multiplayer";
+    const opponent = isMp
+      ? "multiplayer"
+      : c.opponent === "hard"
         ? "hard"
         : c.opponent === "medium"
           ? "medium"
@@ -160,7 +164,11 @@ window.CBGame = (function () {
             ? "easy"
             : "dummy";
     const mapId = c.mapId === "icy" ? "icy" : "plains";
-    const matchType = c.matchType === "custom" ? "custom" : "quick";
+    const matchType = isMp
+      ? "multiplayer"
+      : c.matchType === "custom"
+        ? "custom"
+        : "quick";
     const fighter =
       c.fighter === "japan"
         ? "japan"
@@ -168,10 +176,22 @@ window.CBGame = (function () {
           ? "russia"
           : "usa";
     let lives = null;
-    if (matchType === "custom") {
+    if (matchType === "custom" || matchType === "multiplayer") {
       lives = Math.max(1, Math.min(100, Math.floor(c.lives || 3)));
     }
-    return { matchType, opponent, mapId, lives, fighter };
+    return {
+      matchType,
+      opponent,
+      mapId,
+      lives,
+      fighter,
+      roomCode: c.roomCode || null,
+      players: Array.isArray(c.players) ? c.players : [],
+    };
+  }
+
+  function isMultiplayer() {
+    return matchConfig.matchType === "multiplayer" || matchConfig.opponent === "multiplayer";
   }
 
   function isBotOpponent() {
@@ -255,7 +275,39 @@ window.CBGame = (function () {
     speedBuff = null;
     dummy = null;
     enemy = null;
-    if (matchConfig.opponent === "dummy") {
+    mpFoe = null;
+    mpPendingHit = 0;
+    remoteGhost = null;
+    if (isMultiplayer()) {
+      const meId =
+        window.CBNetClient && CBNetClient.getState
+          ? CBNetClient.getState().playerId
+          : null;
+      const roster = matchConfig.players || [];
+      let mySlot = 0;
+      for (let i = 0; i < roster.length; i++) {
+        if (roster[i].id === meId) {
+          mySlot = i;
+          break;
+        }
+      }
+      // Spread hosts/guests so they don't spawn on top of each other.
+      player.x = W * (0.18 + mySlot * 0.18);
+      player.facing = mySlot % 2 === 0 ? 1 : -1;
+      mpFoe = {
+        id: "remote",
+        x: W * 0.72,
+        y: spawnY,
+        radius: 42,
+        hp: 100,
+        maxHp: 100,
+        flash: 0,
+        vy: 0,
+        grounded: true,
+        facing: -1,
+        fighter: "usa",
+      };
+    } else if (matchConfig.opponent === "dummy") {
       dummy = {
         id: "dummy",
         x: W * 0.72,
@@ -306,11 +358,12 @@ window.CBGame = (function () {
     remoteGhost = null;
     netSendTimer = 0;
     const mapName = map.name || matchConfig.mapId;
-    statusMsg =
-      (matchConfig.matchType === "custom" ? "Custom" : "Quick") +
-      " · " +
-      mapName +
-      (playerLives != null ? " · " + playerLives + " lives" : "");
+    statusMsg = isMultiplayer()
+      ? "Online · " + mapName + (playerLives != null ? " · " + playerLives + " lives" : "")
+      : (matchConfig.matchType === "custom" ? "Custom" : "Quick") +
+        " · " +
+        mapName +
+        (playerLives != null ? " · " + playerLives + " lives" : "");
     statusTimer = 1.8;
     if (window.CBCamera) window.CBCamera.reset(W, H);
     if (window.CBEffects) window.CBEffects.clear();
@@ -318,6 +371,7 @@ window.CBGame = (function () {
   }
 
   function foe() {
+    if (isMultiplayer()) return mpFoe;
     return isBotOpponent() ? enemy : dummy;
   }
 
@@ -532,6 +586,7 @@ window.CBGame = (function () {
       const reach = PLUNGE_HIT_RADIUS + (target.radius || 30);
       if (dist < reach) {
         landedHit = true;
+        const foeHpBefore = target.hp;
         const finisher = dmg >= target.hp;
         target.hp = Math.max(0, target.hp - dmg);
         target.flash = 0.45;
@@ -557,8 +612,10 @@ window.CBGame = (function () {
           );
           window.CBCamera.addShake(finisher ? 0.72 : 0.55);
         }
-        if (finisher) startFinisherSloMo("plunge");
-        if (target.hp <= 0) {
+        if (finisher && !isMultiplayer()) startFinisherSloMo("plunge");
+        if (isMultiplayer()) {
+          flushMpHits(foeHpBefore);
+        } else if (target.hp <= 0) {
           handleFoeKo(target, isBotOpponent() ? "enemy" : "dummy", {
             knockDir: { x: nx, y: -0.42 },
             power: 1.7,
@@ -1196,6 +1253,7 @@ window.CBGame = (function () {
     }
 
     const target = foe();
+    if (isMultiplayer()) syncMpFoeFromRemote();
     const foeHpBefore = target ? target.hp : 0;
 
     if (window.CBAllies) {
@@ -1223,12 +1281,17 @@ window.CBGame = (function () {
     const playerHpBefore = player.hp;
     window.CBEffects.update(dt, hitList);
     if (target) clampEntity(target);
+    if (isMultiplayer()) flushMpHits(foeHpBefore);
 
-    if (target && target.hp < foeHpBefore) {
+    if (target && target.hp < foeHpBefore && !isMultiplayer()) {
       addUlt((foeHpBefore - target.hp) * ULT_PER_DAMAGE);
     }
+    if (isMultiplayer() && mpPendingHit > 0) {
+      addUlt(mpPendingHit * ULT_PER_DAMAGE);
+      mpPendingHit = 0;
+    }
 
-    if (isBotOpponent() && player.hp < playerHpBefore) {
+    if ((isBotOpponent() || isMultiplayer()) && player.hp < playerHpBefore) {
       invulnTimer = Math.max(invulnTimer, 0.35);
       player.invuln = true;
       console.log("[CBGame] player hit hp=" + player.hp);
@@ -1244,7 +1307,22 @@ window.CBGame = (function () {
         handleFoeKo(enemy, "enemy");
       }
 
-      if (isBotOpponent() && player.hp <= 0) {
+      if (isMultiplayer() && mpFoe && remoteGhost) {
+        if (remoteGhost.hp <= 0 && !mpFoe._koLatched) {
+          mpFoe._koLatched = true;
+          statusMsg = "Rival KO!";
+          statusTimer = 1.4;
+          if (window.CBCamera) window.CBCamera.addShake(0.4);
+          console.log("[CBGame] remote KO flash");
+        }
+        if (remoteGhost.hp > 0) mpFoe._koLatched = false;
+        if (typeof remoteGhost.lives === "number" && remoteGhost.lives <= 0 && !matchOver) {
+          endMatch(true);
+          return;
+        }
+      }
+
+      if ((isBotOpponent() || isMultiplayer()) && player.hp <= 0) {
         statusMsg = "You were KO'd!";
         statusTimer = 1.6;
         triggerKoExplosion("player", player.x, player.y);
@@ -1398,7 +1476,7 @@ window.CBGame = (function () {
   }
 
   function publishMultiplayerState(dt) {
-    if (!window.CBNetClient || !player) return;
+    if (!isMultiplayer() || !window.CBNetClient || !player) return;
     const net = CBNetClient.getState ? CBNetClient.getState() : null;
     if (!net || !net.connected || !net.roomCode) return;
     netSendTimer -= dt;
@@ -1406,6 +1484,7 @@ window.CBGame = (function () {
     netSendTimer = 0.05;
     if (CBNetClient.sendState) {
       CBNetClient.sendState({
+        playerId: net.playerId,
         x: player.x,
         y: player.y,
         hp: player.hp,
@@ -1413,14 +1492,33 @@ window.CBGame = (function () {
         facing: player.facing,
         fighter: player.id,
         radius: player.radius,
+        lives: playerLives,
         ts: Date.now(),
       });
     }
   }
 
+  function syncMpFoeFromRemote() {
+    if (!isMultiplayer() || !mpFoe || !remoteGhost) return;
+    mpFoe.x = remoteGhost.x;
+    mpFoe.y = remoteGhost.y;
+    mpFoe.radius = remoteGhost.radius || mpFoe.radius;
+    mpFoe.facing = remoteGhost.facing;
+    mpFoe.fighter = remoteGhost.fighter || mpFoe.fighter;
+    mpFoe.maxHp = remoteGhost.maxHp || mpFoe.maxHp;
+    // Authoritative HP comes from the remote player snapshot.
+    mpFoe.hp = Math.max(0, remoteGhost.hp);
+    if (mpFoe.flash > 0) mpFoe.flash -= 0.05;
+  }
+
   function setRemoteSnapshot(snapshot) {
     const s = snapshot || {};
     if (typeof s.x !== "number" || typeof s.y !== "number") return;
+    const myId =
+      window.CBNetClient && CBNetClient.getState
+        ? CBNetClient.getState().playerId
+        : null;
+    if (s.playerId && myId && s.playerId === myId) return;
     remoteGhost = {
       x: s.x,
       y: s.y,
@@ -1429,8 +1527,46 @@ window.CBGame = (function () {
       facing: s.facing >= 0 ? 1 : -1,
       fighter: s.fighter || "usa",
       radius: typeof s.radius === "number" ? s.radius : 42,
+      lives: typeof s.lives === "number" ? s.lives : null,
+      playerId: s.playerId || null,
       ts: typeof s.ts === "number" ? s.ts : Date.now(),
     };
+    if (typeof s.lives === "number") foeLives = s.lives;
+  }
+
+  function applyRemoteHit(payload) {
+    if (!isMultiplayer() || !player || matchOver) return;
+    const amount = Math.max(0, Number(payload && payload.amount) || 0);
+    if (amount <= 0) return;
+    if (invulnTimer > 0 || player.invuln) return;
+    const before = player.hp;
+    player.hp = Math.max(0, player.hp - amount);
+    player.flash = 0.35;
+    invulnTimer = Math.max(invulnTimer, 0.28);
+    player.invuln = true;
+    console.log(
+      "[CBGame] remote hit dmg=" + amount + " hp " + before + "->" + player.hp
+    );
+  }
+
+  function flushMpHits(foeHpBefore) {
+    if (!isMultiplayer() || !mpFoe || !window.CBNetClient) return;
+    if (!(mpFoe.hp < foeHpBefore)) return;
+    const amount = foeHpBefore - mpFoe.hp;
+    mpPendingHit += amount;
+    // Restore local proxy HP; peer applies damage on their machine.
+    mpFoe.hp = foeHpBefore;
+    mpFoe.flash = 0.4;
+    if (CBNetClient.sendHit) {
+      CBNetClient.sendHit({
+        amount: amount,
+        from:
+          window.CBNetClient.getState && CBNetClient.getState().playerId
+            ? CBNetClient.getState().playerId
+            : null,
+        ts: Date.now(),
+      });
+    }
   }
 
   function drawEntityCircle(ent, fill) {
@@ -1574,7 +1710,7 @@ window.CBGame = (function () {
       }
     }
 
-    if (remoteGhost && !sil) {
+    if (remoteGhost && !sil && !isMultiplayer()) {
       const ageMs = Date.now() - (remoteGhost.ts || 0);
       if (ageMs < 2200) {
         const gImg = fighterImgById(remoteGhost.fighter);
@@ -1605,6 +1741,33 @@ window.CBGame = (function () {
           },
           "Remote"
         );
+      }
+    }
+
+    if (isMultiplayer() && mpFoe && !sil) {
+      const ageOk = !remoteGhost || Date.now() - (remoteGhost.ts || 0) < 2500;
+      if (ageOk) {
+        const gImg = fighterImgById(mpFoe.fighter || (remoteGhost && remoteGhost.fighter));
+        const gx = mpFoe.x;
+        const gy = mpFoe.y;
+        const gr = mpFoe.radius || 42;
+        if (gImg && gImg.complete) {
+          const sz = gr * 2;
+          ctx.save();
+          ctx.translate(gx, gy);
+          if ((mpFoe.facing || -1) < 0) ctx.scale(-1, 1);
+          ctx.drawImage(gImg, -sz / 2, -sz / 2, sz, sz);
+          ctx.restore();
+        } else {
+          drawEntityCircle(mpFoe, "#8aa0c7");
+        }
+        if (mpFoe.flash > 0) {
+          ctx.fillStyle = `rgba(255,255,255,${Math.min(0.8, mpFoe.flash * 4)})`;
+          ctx.beginPath();
+          ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        drawHpBar(mpFoe, "Rival");
       }
     }
 
@@ -1949,8 +2112,10 @@ window.CBGame = (function () {
     start,
     stop,
     setRemoteSnapshot: setRemoteSnapshot,
+    applyRemoteHit: applyRemoteHit,
     clearRemoteSnapshot: function () {
       remoteGhost = null;
+      mpFoe = null;
     },
   };
 })();

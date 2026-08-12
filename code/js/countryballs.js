@@ -88,6 +88,9 @@ window.CBCountryballs = (function () {
     return {
       version: 3,
       coins: 0,
+      settings: {
+        tutorialCompleted: false,
+      },
       inventory: (function () {
         const inv = emptyInventory();
         inv.effects.push("uncle_sam");
@@ -102,6 +105,15 @@ window.CBCountryballs = (function () {
         russia: makeBall("russia", { owned: false }),
       },
     };
+  }
+
+  function normalizeSettings(raw, hadSettingsKey) {
+    // Existing cloud saves without settings: treat tutorial as done (don't force vets).
+    // Brand-new seeds include settings.tutorialCompleted = false.
+    const completed = hadSettingsKey
+      ? !!(raw && raw.tutorialCompleted)
+      : true;
+    return { tutorialCompleted: completed };
   }
 
   function normalizeInventory(raw, balls) {
@@ -172,6 +184,10 @@ window.CBCountryballs = (function () {
     return {
       version: 3,
       coins: Math.max(0, Math.floor(data.coins != null ? data.coins : 0)),
+      settings: normalizeSettings(
+        data.settings,
+        data && Object.prototype.hasOwnProperty.call(data, "settings")
+      ),
       inventory: normalizeInventory(data.inventory, balls),
       balls: balls,
     };
@@ -643,6 +659,26 @@ window.CBCountryballs = (function () {
     return roster;
   }
 
+  function getSettings() {
+    ensure();
+    if (!roster.settings) {
+      roster.settings = { tutorialCompleted: true };
+    }
+    return roster.settings;
+  }
+
+  function hasCompletedTutorial() {
+    return !!getSettings().tutorialCompleted;
+  }
+
+  function setTutorialCompleted(done) {
+    ensure();
+    getSettings().tutorialCompleted = !!done;
+    save();
+    console.log("[CBCountryballs] tutorialCompleted=", !!done);
+    return { ok: true };
+  }
+
   load();
 
   return {
@@ -689,5 +725,8 @@ window.CBCountryballs = (function () {
     unlockWeapon,
     unlockEffect,
     unlockCharacter,
+    getSettings,
+    hasCompletedTutorial,
+    setTutorialCompleted,
   };
 })();
