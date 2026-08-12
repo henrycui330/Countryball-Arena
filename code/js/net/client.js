@@ -9,7 +9,10 @@ window.CBNetClient = (function () {
   let handlers = {};
   let reconnectTimer = 0;
   let wantUrl = null;
-  let pendingAction = null; // { kind: 'create'|'join', payload, code? }
+  let pendingAction = null;
+  let sessionRoomCode = null;
+  let sessionJoinPayload = null;
+  let sessionWasHost = false;
 
   function emit(name, payload) {
     const fn = handlers && handlers[name];
@@ -29,6 +32,25 @@ window.CBNetClient = (function () {
       console.warn("[CBNetClient] send failed", err);
       return false;
     }
+  }
+
+  function rememberRoom(code, extra, isHost) {
+    sessionRoomCode = code ? String(code).trim() : null;
+    sessionJoinPayload = extra ? Object.assign({}, extra) : null;
+    sessionWasHost = !!isHost;
+  }
+
+  function clearSessionRoom() {
+    sessionRoomCode = null;
+    sessionJoinPayload = null;
+    sessionWasHost = false;
+  }
+
+  function rejoinSessionRoom() {
+    if (!sessionRoomCode || !state.connected) return;
+    const payload = Object.assign({}, sessionJoinPayload || {}, { code: sessionRoomCode });
+    console.log("[CBNetClient] rejoin after reconnect", sessionRoomCode);
+    send("join_room", payload);
   }
 
   function flushPending() {
@@ -62,7 +84,6 @@ window.CBNetClient = (function () {
       return;
     }
 
-    // Already online on the same URL — keep socket.
     if (
       ws &&
       ws.readyState === WebSocket.OPEN &&
@@ -73,7 +94,6 @@ window.CBNetClient = (function () {
       return;
     }
 
-    // Already connecting to same URL — wait.
     if (ws && ws.readyState === WebSocket.CONNECTING && state.url === wantUrl) {
       console.log("[CBNetClient] already connecting", wantUrl);
       return;
@@ -117,7 +137,7 @@ window.CBNetClient = (function () {
       console.warn("[CBNetClient] socket error", wantUrl);
       emit("status", {
         ok: false,
-        message: "Connection problem (check VPN / Clash for workers.dev)",
+        message: "Connection problem — check network",
         state: Object.assign({}, state),
       });
     });
@@ -135,12 +155,21 @@ window.CBNetClient = (function () {
       if (type === "hello") {
         state.playerId = payload.playerId || null;
         console.log("[CBNetClient] hello", state.playerId);
+        if (sessionRoomCode) rejoinSessionRoom();
       }
-      if (type === "room_created" || type === "room_joined" || type === "room_state") {
+      if (type === "room_created") {
         state.roomCode = payload.code || state.roomCode;
+        rememberRoom(state.roomCode, sessionJoinPayload, true);
+      }
+      if (type === "room_joined" || type === "room_state") {
+        state.roomCode = payload.code || state.roomCode;
+        if (type === "room_joined") {
+          rememberRoom(state.roomCode, sessionJoinPayload, sessionWasHost);
+        }
       }
       if (type === "left_room") {
         state.roomCode = null;
+        clearSessionRoom();
       }
       emit("message", { type: type, payload: payload, state: Object.assign({}, state) });
     });
@@ -149,6 +178,7 @@ window.CBNetClient = (function () {
   function disconnect() {
     wantUrl = null;
     pendingAction = null;
+    clearSessionRoom();
     if (reconnectTimer) clearTimeout(reconnectTimer);
     reconnectTimer = 0;
     if (!ws) return;
@@ -158,6 +188,7 @@ window.CBNetClient = (function () {
   }
 
   function createRoom(extra) {
+    sessionJoinPayload = extra ? Object.assign({}, extra) : null;
     if (send("create_room", extra || {})) return true;
     pendingAction = { kind: "create", payload: extra || {} };
     connect(wantUrl || state.url);
@@ -166,6 +197,7 @@ window.CBNetClient = (function () {
 
   function joinRoom(code, extra) {
     const payload = Object.assign({}, extra || {}, { code: String(code || "").trim() });
+    rememberRoom(payload.code, extra || {}, false);
     if (send("join_room", payload)) return true;
     pendingAction = { kind: "join", code: payload.code, payload: extra || {} };
     connect(wantUrl || state.url);
@@ -173,6 +205,7 @@ window.CBNetClient = (function () {
   }
 
   function leaveRoom() {
+    clearSessionRoom();
     return send("leave_room", {});
   }
 

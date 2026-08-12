@@ -1,4 +1,6 @@
 const ROOM_CAPACITY = 4;
+const ROOM_TTL_MS = 30 * 60 * 1000; // 30 min
+const REGISTRY_KEY = "room_registry";
 
 function json(data, init) {
   return new Response(JSON.stringify(data), {
@@ -7,10 +9,10 @@ function json(data, init) {
   });
 }
 
-function makeRoomCode(rooms) {
+function makeRoomCode(registry) {
   for (let i = 0; i < 500; i++) {
     const code = String(10000 + Math.floor(Math.random() * 90000));
-    if (!rooms.has(code)) return code;
+    if (!registry[code]) return code;
   }
   throw new Error("Room code generation exhausted");
 }
@@ -42,10 +44,6 @@ export default {
   },
 };
 
-/**
- * Single lobby Durable Object.
- * Peers/rooms must survive hibernation via WebSocket attachments.
- */
 export class RoomServer {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -54,42 +52,59 @@ export class RoomServer {
     this.rooms = new Map();
     /** @type {Map<WebSocket, { id: string, roomCode: string|null, ready: boolean, fighter: string, name: string, mapId?: string }>} */
     this.peers = new Map();
+    this.registryCache = null;
+    this.loaded = false;
     this.restoreFromHibernation();
+  }
+
+  async ensureLoaded() {
+    if (this.loaded) return;
+    this.loaded = true;
+    await this.pruneRegistry();
+    const registry = await this.loadRegistry();
+    const now = Date.now();
+    for (const code of Object.keys(registry)) {
+      if (this.rooms.has(code)) continue;
+      const entry = registry[code];
+      if (!entry || now - (entry.createdAt || 0) > ROOM_TTL_MS) continue;
+      this.rooms.set(code, {
+        code: code,
+        members: new Set(),
+        mapId: entry.mapId === "icy" ? "icy" : "plains",
+        started: !!entry.started,
+      });
+    }
   }
 
   restoreFromHibernation() {
     const sockets = this.ctx.getWebSockets();
     for (const ws of sockets) {
-      let meta = null;
-      try {
-        meta = ws.deserializeAttachment();
-      } catch (_) {
-        meta = null;
-      }
-      if (!meta || !meta.id) continue;
-      this.peers.set(ws, {
-        id: meta.id,
-        roomCode: meta.roomCode || null,
-        ready: !!meta.ready,
-        fighter: meta.fighter || "usa",
-        name: meta.name || "Player",
-        mapId: meta.mapId || "plains",
-      });
+      const peer = this.readAttachment(ws);
+      if (!peer) continue;
+      this.peers.set(ws, peer);
     }
     for (const [ws, peer] of this.peers.entries()) {
       if (!peer.roomCode) continue;
-      let room = this.rooms.get(peer.roomCode);
-      if (!room) {
-        room = {
-          code: peer.roomCode,
-          members: new Set(),
-          mapId: peer.mapId || "plains",
-          started: false,
-        };
-        this.rooms.set(peer.roomCode, room);
-      }
-      room.members.add(ws);
+      this.attachToRoom(ws, peer.roomCode, peer.mapId || "plains");
     }
+  }
+
+  readAttachment(ws) {
+    let meta = null;
+    try {
+      meta = ws.deserializeAttachment();
+    } catch (_) {
+      meta = null;
+    }
+    if (!meta || !meta.id) return null;
+    return {
+      id: meta.id,
+      roomCode: meta.roomCode || null,
+      ready: !!meta.ready,
+      fighter: meta.fighter || "usa",
+      name: meta.name || "Player",
+      mapId: meta.mapId || "plains",
+    };
   }
 
   persistPeer(ws, peer) {
@@ -109,47 +124,115 @@ export class RoomServer {
   ensurePeer(ws) {
     let peer = this.peers.get(ws);
     if (peer) return peer;
-    let meta = null;
-    try {
-      meta = ws.deserializeAttachment();
-    } catch (_) {
-      meta = null;
+    peer = this.readAttachment(ws);
+    if (!peer) return null;
+    this.peers.set(ws, peer);
+    if (peer.roomCode) {
+      this.attachToRoom(ws, peer.roomCode, peer.mapId || "plains");
     }
-    if (meta && meta.id) {
-      peer = {
-        id: meta.id,
-        roomCode: meta.roomCode || null,
-        ready: !!meta.ready,
-        fighter: meta.fighter || "usa",
-        name: meta.name || "Player",
-        mapId: meta.mapId || "plains",
+    return peer;
+  }
+
+  attachToRoom(ws, code, mapId) {
+    let room = this.rooms.get(code);
+    if (!room) {
+      room = {
+        code: code,
+        members: new Set(),
+        mapId: mapId === "icy" ? "icy" : "plains",
+        started: false,
       };
-      this.peers.set(ws, peer);
-      if (peer.roomCode) {
-        let room = this.rooms.get(peer.roomCode);
-        if (!room) {
-          room = {
-            code: peer.roomCode,
-            members: new Set(),
-            mapId: peer.mapId || "plains",
-            started: false,
-          };
-          this.rooms.set(peer.roomCode, room);
-        }
-        room.members.add(ws);
-      }
-      return peer;
+      this.rooms.set(code, room);
     }
-    return null;
+    room.members.add(ws);
+  }
+
+  async loadRegistry() {
+    if (this.registryCache) return this.registryCache;
+    const stored = await this.ctx.storage.get(REGISTRY_KEY);
+    this.registryCache = stored && typeof stored === "object" ? stored : {};
+    return this.registryCache;
+  }
+
+  async saveRegistry() {
+    await this.ctx.storage.put(REGISTRY_KEY, this.registryCache || {});
+  }
+
+  async registerRoom(code, mapId, started) {
+    const registry = await this.loadRegistry();
+    registry[code] = {
+      mapId: mapId === "icy" ? "icy" : "plains",
+      createdAt: Date.now(),
+      started: !!started,
+    };
+    this.registryCache = registry;
+    await this.saveRegistry();
+  }
+
+  async unregisterRoom(code) {
+    const registry = await this.loadRegistry();
+    if (registry[code]) {
+      delete registry[code];
+      this.registryCache = registry;
+      await this.saveRegistry();
+    }
+  }
+
+  async pruneRegistry() {
+    const registry = await this.loadRegistry();
+    const now = Date.now();
+    let changed = false;
+    for (const code of Object.keys(registry)) {
+      const entry = registry[code];
+      if (!entry || now - (entry.createdAt || 0) > ROOM_TTL_MS) {
+        delete registry[code];
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.registryCache = registry;
+      await this.saveRegistry();
+    }
+  }
+
+  async roomExists(code) {
+    await this.ensureLoaded();
+    if (this.rooms.has(code)) return true;
+    const registry = await this.loadRegistry();
+    const entry = registry[code];
+    if (!entry) return false;
+    if (Date.now() - (entry.createdAt || 0) > ROOM_TTL_MS) return false;
+    return true;
+  }
+
+  async getOrCreateRoom(code, fallbackMapId) {
+    await this.ensureLoaded();
+    let room = this.rooms.get(code);
+    if (room) return room;
+    const registry = await this.loadRegistry();
+    const entry = registry[code];
+    if (!entry) return null;
+    if (Date.now() - (entry.createdAt || 0) > ROOM_TTL_MS) return null;
+    room = {
+      code: code,
+      members: new Set(),
+      mapId: entry.mapId || fallbackMapId || "plains",
+      started: !!entry.started,
+    };
+    this.rooms.set(code, room);
+    return room;
   }
 
   async fetch(request) {
+    await this.ensureLoaded();
     if (request.headers.get("Upgrade") !== "websocket") {
+      const registry = await this.loadRegistry();
       return json({
         ok: true,
         lobby: true,
         rooms: this.rooms.size,
         peers: this.peers.size,
+        registry: Object.keys(registry).length,
       });
     }
 
@@ -172,7 +255,8 @@ export class RoomServer {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  webSocketMessage(ws, raw) {
+  async webSocketMessage(ws, raw) {
+    await this.ensureLoaded();
     let msg = null;
     try {
       msg = JSON.parse(String(raw));
@@ -190,15 +274,15 @@ export class RoomServer {
     }
 
     if (type === "create_room") {
-      this.handleCreateRoom(ws, peer, payload);
+      await this.handleCreateRoom(ws, peer, payload);
       return;
     }
     if (type === "join_room") {
-      this.handleJoinRoom(ws, peer, payload);
+      await this.handleJoinRoom(ws, peer, payload);
       return;
     }
     if (type === "leave_room") {
-      this.removeFromRoom(ws, "leave");
+      await this.removeFromRoom(ws, "leave", true);
       this.send(ws, "left_room", {});
       return;
     }
@@ -227,6 +311,7 @@ export class RoomServer {
           if (hostWs === ws) {
             room.mapId = payload.mapId;
             peer.mapId = payload.mapId;
+            await this.registerRoom(peer.roomCode, room.mapId, room.started);
           }
         }
         this.persistPeer(ws, peer);
@@ -237,7 +322,7 @@ export class RoomServer {
       return;
     }
     if (type === "start_match") {
-      this.handleStartMatch(ws, peer, payload);
+      await this.handleStartMatch(ws, peer, payload);
       return;
     }
     if (type === "state" || type === "input" || type === "hit") {
@@ -249,19 +334,20 @@ export class RoomServer {
     this.send(ws, "error", { message: `Unknown message type: ${type}` });
   }
 
-  webSocketClose(ws) {
-    this.removeFromRoom(ws, "disconnect");
+  async webSocketClose(ws) {
+    await this.removeFromRoom(ws, "disconnect", false);
     this.peers.delete(ws);
   }
 
-  webSocketError(ws) {
-    this.removeFromRoom(ws, "disconnect");
+  async webSocketError(ws) {
+    await this.removeFromRoom(ws, "disconnect", false);
     this.peers.delete(ws);
   }
 
-  handleCreateRoom(ws, peer, payload) {
-    this.removeFromRoom(ws, "switch_room");
-    const code = makeRoomCode(this.rooms);
+  async handleCreateRoom(ws, peer, payload) {
+    await this.removeFromRoom(ws, "switch_room", false);
+    const registry = await this.loadRegistry();
+    const code = makeRoomCode(registry);
     const mapId = payload.mapId === "icy" ? "icy" : "plains";
     const room = {
       code: code,
@@ -280,31 +366,41 @@ export class RoomServer {
       peer.name = String(payload.name).trim().slice(0, 16);
     }
     this.persistPeer(ws, peer);
+    await this.registerRoom(code, mapId, false);
     this.send(ws, "room_created", { code: code, playerId: peer.id });
     this.broadcastRoomState(code, "create");
+    console.log("[RoomServer] create", code, "registry=", Object.keys(registry).length + 1);
   }
 
-  handleJoinRoom(ws, peer, payload) {
+  async handleJoinRoom(ws, peer, payload) {
     const code = String(payload.code || "").trim();
     if (!/^\d{5}$/.test(code)) {
       this.send(ws, "error", { message: "Enter a 5-digit room code." });
       return;
     }
-    const room = this.rooms.get(code);
+
+    const exists = await this.roomExists(code);
+    if (!exists) {
+      this.send(ws, "error", { message: "Room not found. Check the code or ask host to create again." });
+      console.warn("[RoomServer] join miss", code);
+      return;
+    }
+
+    const room = await this.getOrCreateRoom(code, payload.mapId === "icy" ? "icy" : "plains");
     if (!room) {
-      this.send(ws, "error", { message: "Room not found. Ask the host for a new code." });
+      this.send(ws, "error", { message: "Room expired. Ask host to create a new room." });
       return;
     }
     if (room.started) {
       this.send(ws, "error", { message: "Match already started." });
       return;
     }
-    if (room.members.size >= ROOM_CAPACITY) {
+    if (room.members.size >= ROOM_CAPACITY && !room.members.has(ws)) {
       this.send(ws, "error", { message: "Room is full (max 4)." });
       return;
     }
 
-    this.removeFromRoom(ws, "switch_room");
+    await this.removeFromRoom(ws, "switch_room", false);
     room.members.add(ws);
     peer.roomCode = code;
     peer.ready = false;
@@ -318,9 +414,10 @@ export class RoomServer {
     this.persistPeer(ws, peer);
     this.send(ws, "room_joined", { code: code, playerId: peer.id });
     this.broadcastRoomState(code, "join");
+    console.log("[RoomServer] join ok", code, "members=", room.members.size);
   }
 
-  handleStartMatch(ws, peer, payload) {
+  async handleStartMatch(ws, peer, payload) {
     if (!peer.roomCode) {
       this.send(ws, "error", { message: "Join a room first." });
       return;
@@ -340,6 +437,7 @@ export class RoomServer {
       room.mapId = payload.mapId;
     }
     room.started = true;
+    await this.registerRoom(room.code, room.mapId, true);
     for (const member of room.members) {
       const p = this.ensurePeer(member);
       if (p) {
@@ -364,7 +462,7 @@ export class RoomServer {
     return null;
   }
 
-  removeFromRoom(ws, reason) {
+  async removeFromRoom(ws, reason, explicitLeave) {
     const peer = this.ensurePeer(ws);
     if (!peer || !peer.roomCode) return;
     const code = peer.roomCode;
@@ -376,6 +474,9 @@ export class RoomServer {
     room.members.delete(ws);
     if (room.members.size === 0) {
       this.rooms.delete(code);
+      if (explicitLeave) {
+        await this.unregisterRoom(code);
+      }
       return;
     }
     room.started = false;
