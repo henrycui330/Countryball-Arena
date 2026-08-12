@@ -68,6 +68,8 @@ window.CBGame = (function () {
   let remoteGhost = null;
   let mpFoe = null;
   let mpPendingHit = 0;
+  let mpFxHideWeaponUntil = 0;
+  let lastCosmeticsSent = null;
 
   function playerHasWrath() {
     return !!(
@@ -277,6 +279,8 @@ window.CBGame = (function () {
     enemy = null;
     mpFoe = null;
     mpPendingHit = 0;
+    mpFxHideWeaponUntil = 0;
+    lastCosmeticsSent = null;
     remoteGhost = null;
     if (isMultiplayer()) {
       const meId =
@@ -1488,7 +1492,7 @@ window.CBGame = (function () {
     if (!net || !net.connected || !net.roomCode) return;
     netSendTimer -= dt;
     if (netSendTimer > 0) return;
-    netSendTimer = 0.033; // ~30 Hz
+    netSendTimer = 0.045; // ~22 Hz — smoother feel without flooding
     const ballId = player.id;
     const hatId =
       window.CBCountryballs && CBCountryballs.getHatId
@@ -1502,26 +1506,31 @@ window.CBGame = (function () {
       window.CBCountryballs && CBCountryballs.getEffectId
         ? CBCountryballs.getEffectId(ballId)
         : null;
-    if (CBNetClient.sendState) {
-      CBNetClient.sendState({
-        playerId: net.playerId,
-        x: player.x,
-        y: player.y,
-        hp: player.hp,
-        maxHp: player.maxHp,
-        facing: player.facing,
-        fighter: player.id,
-        radius: player.radius,
-        lives: playerLives,
-        aimX: player.aimX,
-        aimY: player.aimY,
-        hatId: hatId,
-        weaponId: weaponId,
-        effectId: effectId,
-        plunging: !!player.plunging,
-        ts: Date.now(),
-      });
+    const cosKey = String(hatId || "") + "|" + String(weaponId || "") + "|" + String(effectId || "");
+    const sendCosmetics = lastCosmeticsSent !== cosKey;
+    if (sendCosmetics) lastCosmeticsSent = cosKey;
+    const payload = {
+      playerId: net.playerId,
+      x: player.x,
+      y: player.y,
+      hp: player.hp,
+      maxHp: player.maxHp,
+      facing: player.facing,
+      fighter: player.id,
+      radius: player.radius,
+      lives: playerLives,
+      aimX: player.aimX,
+      aimY: player.aimY,
+      plunging: !!player.plunging,
+      ts: Date.now(),
+    };
+    if (sendCosmetics) {
+      payload.hatId = hatId;
+      payload.weaponId = weaponId;
+      payload.effectId = effectId;
+      payload.cosmetics = true;
     }
+    if (CBNetClient.sendState) CBNetClient.sendState(payload);
   }
 
   function publishFx(kind, extra) {
@@ -1578,12 +1587,15 @@ window.CBGame = (function () {
 
   function syncMpFoeFromRemote(dt) {
     if (!isMultiplayer() || !mpFoe || !remoteGhost) return;
+    if (mpFxHideWeaponUntil > 0) {
+      mpFxHideWeaponUntil = Math.max(0, mpFxHideWeaponUntil - (dt || 0));
+    }
     const tx = remoteGhost.x;
     const ty = remoteGhost.y;
     mpFoe._tx = tx;
     mpFoe._ty = ty;
-    // Smooth lerp — cuts visual stutter without adding input lag
-    const k = Math.min(1, (dt || 0.016) * 22);
+    // Smooth lerp — gentle to avoid rubber-band
+    const k = Math.min(1, (dt || 0.016) * 14);
     mpFoe.x += (tx - mpFoe.x) * k;
     mpFoe.y += (ty - mpFoe.y) * k;
     mpFoe.radius = remoteGhost.radius || mpFoe.radius;
@@ -1593,9 +1605,9 @@ window.CBGame = (function () {
     mpFoe.hp = Math.max(0, remoteGhost.hp);
     mpFoe.aimX = typeof remoteGhost.aimX === "number" ? remoteGhost.aimX : mpFoe.x + mpFoe.facing * 80;
     mpFoe.aimY = typeof remoteGhost.aimY === "number" ? remoteGhost.aimY : mpFoe.y;
-    mpFoe.hatId = remoteGhost.hatId || null;
-    mpFoe.weaponId = remoteGhost.weaponId || null;
-    mpFoe.effectId = remoteGhost.effectId || null;
+    if (remoteGhost.hatId !== undefined) mpFoe.hatId = remoteGhost.hatId || null;
+    if (remoteGhost.weaponId !== undefined) mpFoe.weaponId = remoteGhost.weaponId || null;
+    if (remoteGhost.effectId !== undefined) mpFoe.effectId = remoteGhost.effectId || null;
     mpFoe.plunging = !!remoteGhost.plunging;
     if (mpFoe.flash > 0) mpFoe.flash -= 0.05;
   }
@@ -1608,30 +1620,38 @@ window.CBGame = (function () {
         ? CBNetClient.getState().playerId
         : null;
     if (s.playerId && myId && s.playerId === myId) return;
+    const prev = remoteGhost;
     remoteGhost = {
       x: s.x,
       y: s.y,
-      hp: typeof s.hp === "number" ? s.hp : 100,
-      maxHp: typeof s.maxHp === "number" ? s.maxHp : 100,
+      hp: typeof s.hp === "number" ? s.hp : prev && typeof prev.hp === "number" ? prev.hp : 100,
+      maxHp: typeof s.maxHp === "number" ? s.maxHp : prev && prev.maxHp ? prev.maxHp : 100,
       facing: s.facing >= 0 ? 1 : -1,
-      fighter: s.fighter || "usa",
-      radius: typeof s.radius === "number" ? s.radius : 42,
-      lives: typeof s.lives === "number" ? s.lives : null,
+      fighter: s.fighter || (prev && prev.fighter) || "usa",
+      radius: typeof s.radius === "number" ? s.radius : prev && prev.radius ? prev.radius : 42,
+      lives: typeof s.lives === "number" ? s.lives : prev ? prev.lives : null,
       playerId: s.playerId || null,
       aimX: typeof s.aimX === "number" ? s.aimX : s.x,
       aimY: typeof s.aimY === "number" ? s.aimY : s.y,
-      hatId: s.hatId || null,
-      weaponId: s.weaponId || null,
-      effectId: s.effectId || null,
+      hatId: s.cosmetics ? s.hatId || null : prev ? prev.hatId : s.hatId || null,
+      weaponId: s.cosmetics ? s.weaponId || null : prev ? prev.weaponId : s.weaponId || null,
+      effectId: s.cosmetics ? s.effectId || null : prev ? prev.effectId : s.effectId || null,
       plunging: !!s.plunging,
       ts: typeof s.ts === "number" ? s.ts : Date.now(),
     };
+    // Also accept cosmetics if fields present without flag (compat)
+    if (!s.cosmetics) {
+      if (s.hatId !== undefined) remoteGhost.hatId = s.hatId || null;
+      if (s.weaponId !== undefined) remoteGhost.weaponId = s.weaponId || null;
+      if (s.effectId !== undefined) remoteGhost.effectId = s.effectId || null;
+    }
     if (typeof s.lives === "number") foeLives = s.lives;
     if (mpFoe && mpFoe._tx == null) {
       mpFoe.x = s.x;
       mpFoe.y = s.y;
       mpFoe._tx = s.x;
       mpFoe._ty = s.y;
+      if (s.fighter) mpFoe.fighter = s.fighter;
     }
   }
 
@@ -1663,15 +1683,7 @@ window.CBGame = (function () {
     const p = payload || {};
     const kind = p.kind;
     if (!kind) return;
-    // Keep rival pose in sync for follow-based weapon FX
-    if (typeof p.x === "number") {
-      mpFoe.x = p.x;
-      mpFoe._tx = p.x;
-    }
-    if (typeof p.y === "number") {
-      mpFoe.y = p.y;
-      mpFoe._ty = p.y;
-    }
+    // Aim / cosmetics only — do NOT snap x/y (that fights lerp and looks laggy)
     if (typeof p.aimX === "number") mpFoe.aimX = p.aimX;
     if (typeof p.aimY === "number") mpFoe.aimY = p.aimY;
     if (typeof p.facing === "number") mpFoe.facing = p.facing >= 0 ? 1 : -1;
@@ -1685,18 +1697,14 @@ window.CBGame = (function () {
     const aimY = mpFoe.aimY;
     const follow = mpFoe;
 
+    // Hide idle weapon while swing FX owns the sprite
+    if (kind === "bash" || kind === "charged" || kind === "plunge") {
+      mpFxHideWeaponUntil = Math.max(mpFxHideWeaponUntil, 0.55);
+    }
+
     if (kind === "bash") {
       if (fighter === "japan" && CBEffects.spawnKatanaStrike) {
         CBEffects.spawnKatanaStrike({
-          follow: follow,
-          img: img,
-          aimX: aimX,
-          aimY: aimY,
-          damage: 0,
-          ownerId: "remote-fx",
-        });
-      } else if (fighter === "russia" && CBEffects.spawnDeagleBash) {
-        CBEffects.spawnDeagleBash({
           follow: follow,
           img: img,
           aimX: aimX,
@@ -1726,6 +1734,7 @@ window.CBGame = (function () {
           damage: 0,
           ownerId: "remote-fx",
         });
+        mpFxHideWeaponUntil = Math.max(mpFxHideWeaponUntil, 0.85);
       } else if (CBEffects.spawnDeagleSpin) {
         CBEffects.spawnDeagleSpin({
           follow: follow,
@@ -1735,34 +1744,19 @@ window.CBGame = (function () {
           damage: 0,
           ownerId: "remote-fx",
         });
+        mpFxHideWeaponUntil = Math.max(mpFxHideWeaponUntil, 0.85);
       }
       return;
     }
     if (kind === "special") {
       if (CBEffects.spawnBurst) {
-        CBEffects.spawnBurst(aimX, aimY, 14, ["#ffffff", "#f0c43a", "#b22234"]);
-      }
-      if (CBEffects.spawnShockwave) {
-        CBEffects.spawnShockwave(mpFoe.x, mpFoe.y, {
-          maxRadius: 90,
-          color: "rgba(255,255,255,0.4)",
-          width: 2.5,
-          life: 0.28,
-        });
+        CBEffects.spawnBurst(aimX, aimY, 10, ["#ffffff", "#f0c43a", "#b22234"]);
       }
       return;
     }
     if (kind === "ult") {
       if (CBEffects.spawnBurst) {
-        CBEffects.spawnBurst(mpFoe.x, mpFoe.y, 22, ["#f0c43a", "#ffffff", "#ff4d4d"]);
-      }
-      if (CBEffects.spawnShockwave) {
-        CBEffects.spawnShockwave(mpFoe.x, mpFoe.y, {
-          maxRadius: 140,
-          color: "rgba(240,196,58,0.5)",
-          width: 3,
-          life: 0.35,
-        });
+        CBEffects.spawnBurst(mpFoe.x, mpFoe.y, 16, ["#f0c43a", "#ffffff", "#ff4d4d"]);
       }
       return;
     }
@@ -1775,14 +1769,6 @@ window.CBGame = (function () {
           aimY: mpFoe.y + 40,
           damage: 0,
           ownerId: "remote-fx",
-        });
-      }
-      if (CBEffects.spawnShockwave) {
-        CBEffects.spawnShockwave(mpFoe.x, mpFoe.y + 20, {
-          maxRadius: 110,
-          color: "rgba(255,255,255,0.5)",
-          width: 3,
-          life: 0.3,
         });
       }
     }
@@ -1847,63 +1833,53 @@ window.CBGame = (function () {
     const auraOn = !!(auraId && auraId !== "none");
     let floatY = 0;
     if (auraOn) {
-      const floatAmp =
-        auraId === "void_shroud" ? 2.1 : auraId === "solar_aegis" ? 1.8 : 2.5;
-      const floatBase =
-        auraId === "void_shroud" ? -5 : auraId === "solar_aegis" ? -4 : -7;
-      const floatSpeed =
-        auraId === "uncle_sam" ? 3.6 : auraId === "void_shroud" ? 2.5 : 3.1;
-      floatY = floatBase + Math.sin(timeSec * floatSpeed) * floatAmp;
+      floatY = -3 + Math.sin(timeSec * 2.8) * 1.2;
     }
     const cy = gy + floatY;
+    const gImg = fighterImgById(mpFoe.fighter || "usa");
+    const spriteOk = !!(gImg && gImg.complete && gImg.naturalWidth > 0);
 
+    // Soft aura BEHIND sprite — low alpha so Japan isn't a light blob
     if (auraOn && !sil) {
       ctx.save();
-      const rot = facing < 0 ? Math.PI : 0;
+      ctx.globalAlpha = 0.38;
+      const rot = facing < 0 ? -0.2 : 0.2;
       if (auraId === "uncle_sam") {
-        drawAuraGlow(gx, cy, gr * 2.75, gr * 1.82, rot, [
-          [0, "rgba(255, 255, 255, 0.34)"],
-          [0.36, "rgba(31, 75, 165, 0.24)"],
-          [0.68, "rgba(215, 38, 61, 0.21)"],
+        drawAuraGlow(gx, cy, gr * 1.9, gr * 1.35, rot, [
+          [0, "rgba(255, 255, 255, 0.2)"],
+          [0.45, "rgba(31, 75, 165, 0.18)"],
           [1, "rgba(122, 0, 20, 0)"],
         ]);
       } else if (auraId === "void_shroud") {
-        drawAuraGlow(gx, cy, gr * 2.55, gr * 1.62, rot + 0.45, [
-          [0, "rgba(226, 204, 255, 0.22)"],
-          [0.42, "rgba(95, 42, 138, 0.23)"],
-          [0.8, "rgba(42, 10, 66, 0.2)"],
+        drawAuraGlow(gx, cy, gr * 1.85, gr * 1.25, rot, [
+          [0, "rgba(226, 204, 255, 0.18)"],
+          [0.5, "rgba(95, 42, 138, 0.16)"],
           [1, "rgba(16, 8, 24, 0)"],
         ]);
       } else if (auraId === "solar_aegis") {
-        drawAuraGlow(gx, cy, gr * 2.15, gr * 2.65, rot - 0.15, [
-          [0, "rgba(255, 249, 232, 0.4)"],
-          [0.45, "rgba(255, 215, 106, 0.26)"],
-          [0.78, "rgba(246, 183, 60, 0.2)"],
+        drawAuraGlow(gx, cy, gr * 1.7, gr * 1.9, rot, [
+          [0, "rgba(255, 249, 232, 0.22)"],
+          [0.5, "rgba(255, 215, 106, 0.14)"],
           [1, "rgba(201, 134, 26, 0)"],
         ]);
       } else if (auraId === "wrath_of_the_gods") {
-        drawAuraGlow(gx, cy, gr * 2.5, gr * 1.75, rot, [
-          [0, "rgba(255, 50, 50, 0.4)"],
-          [0.55, "rgba(200, 0, 0, 0.18)"],
+        drawAuraGlow(gx, cy, gr * 1.85, gr * 1.3, rot, [
+          [0, "rgba(255, 50, 50, 0.22)"],
+          [0.55, "rgba(200, 0, 0, 0.12)"],
           [1, "rgba(180, 0, 0, 0)"],
         ]);
       }
       ctx.restore();
     }
 
-    const gImg = fighterImgById(mpFoe.fighter || "usa");
-    if (gImg && gImg.complete) {
+    if (spriteOk) {
       const sz = gr * 2;
       ctx.save();
       ctx.translate(gx, cy);
       if (facing < 0) ctx.scale(-1, 1);
       if (sil) ctx.filter = "brightness(0)";
       ctx.drawImage(gImg, -sz / 2, -sz / 2, sz, sz);
-      if (
-        !sil &&
-        window.CBCosmetics &&
-        mpFoe.hatId
-      ) {
+      if (!sil && window.CBCosmetics && mpFoe.hatId) {
         const hat = CBCosmetics.getHat(mpFoe.hatId);
         const himg = hat && hat._img;
         if (hat && himg && himg.complete && himg.naturalWidth) {
@@ -1922,18 +1898,28 @@ window.CBGame = (function () {
       ctx.filter = "none";
       ctx.restore();
     } else {
-      drawEntityCircle({ x: gx, y: cy, radius: gr, flash: 0 }, "#8aa0c7");
+      // Quiet fallback — no glowing circle
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      drawEntityCircle({ x: gx, y: cy, radius: gr, flash: 0 }, "#6b7a94");
+      ctx.restore();
+      console.warn(
+        "[CBGame] remote sprite not ready fighter=" +
+          (mpFoe.fighter || "?") +
+          " complete=" +
+          !!(gImg && gImg.complete) +
+          " w=" +
+          (gImg && gImg.naturalWidth)
+      );
     }
 
-    // Idle aimed weapon (visible between attacks)
-    if (!sil && !mpFoe.plunging) {
+    // Idle weapon only when FX swing is not owning the weapon
+    if (!sil && !mpFoe.plunging && mpFxHideWeaponUntil <= 0) {
       const img = remoteWeaponImg(mpFoe.fighter, mpFoe.weaponId);
       if (img && img.complete && img.naturalWidth) {
         const aimX = typeof mpFoe.aimX === "number" ? mpFoe.aimX : gx + facing * 80;
         const aimY = typeof mpFoe.aimY === "number" ? mpFoe.aimY : cy;
-        const dx = aimX - gx;
-        const dy = aimY - cy;
-        const ang = Math.atan2(dy, dx);
+        const ang = Math.atan2(aimY - cy, aimX - gx);
         const handDist = gr * 0.5;
         const hx = gx + Math.cos(ang) * handDist;
         const hy = cy + Math.sin(ang) * handDist;
@@ -1948,12 +1934,22 @@ window.CBGame = (function () {
     }
 
     if (mpFoe.flash > 0 && !sil) {
-      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.8, mpFoe.flash * 4)})`;
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.55, mpFoe.flash * 2.5)})`;
       ctx.beginPath();
       ctx.arc(gx, cy, gr, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (!sil) drawHpBar({ x: gx, y: cy, radius: gr, hp: mpFoe.hp, maxHp: mpFoe.maxHp }, "Rival");
+    if (!sil) {
+      const label =
+        mpFoe.fighter === "japan"
+          ? "Japan"
+          : mpFoe.fighter === "russia"
+            ? "Russia"
+            : mpFoe.fighter === "usa"
+              ? "USA"
+              : "Rival";
+      drawHpBar({ x: gx, y: cy, radius: gr, hp: mpFoe.hp, maxHp: mpFoe.maxHp }, label);
+    }
   }
 
   function drawUltBar() {
