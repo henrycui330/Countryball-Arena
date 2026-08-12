@@ -284,19 +284,16 @@ window.CBGame = (function () {
           ? CBNetClient.getState().playerId
           : null;
       const roster = matchConfig.players || [];
-      let mySlot = 0;
-      for (let i = 0; i < roster.length; i++) {
-        if (roster[i].id === meId) {
-          mySlot = i;
-          break;
-        }
-      }
-      // Spread hosts/guests so they don't spawn on top of each other.
-      player.x = W * (0.18 + mySlot * 0.18);
-      player.facing = mySlot % 2 === 0 ? 1 : -1;
+      const me = roster.find(function (pl) {
+        return pl.id === meId;
+      });
+      const amHost = !!(me && me.isHost);
+      // Host on the right, guest(s) on the left — face each other.
+      player.x = amHost ? W * 0.78 : W * 0.22;
+      player.facing = amHost ? -1 : 1;
       mpFoe = {
         id: "remote",
-        x: W * 0.72,
+        x: amHost ? W * 0.22 : W * 0.78,
         y: spawnY,
         radius: 42,
         hp: 100,
@@ -304,8 +301,15 @@ window.CBGame = (function () {
         flash: 0,
         vy: 0,
         grounded: true,
-        facing: -1,
+        facing: amHost ? 1 : -1,
         fighter: "usa",
+        aimX: amHost ? W * 0.22 : W * 0.78,
+        aimY: spawnY,
+        hatId: null,
+        weaponId: null,
+        effectId: null,
+        _tx: null,
+        _ty: null,
       };
     } else if (matchConfig.opponent === "dummy") {
       dummy = {
@@ -422,7 +426,9 @@ window.CBGame = (function () {
   }
 
   function noteCastResult(result, label) {
-    if (!result || !result.ok || !result.finisher) return;
+    if (!result || !result.ok) return;
+    if (isMultiplayer()) publishFx(label || "bash");
+    if (!result.finisher) return;
     if (foeHp() <= 0) return;
     startFinisherSloMo(label);
   }
@@ -519,6 +525,7 @@ window.CBGame = (function () {
     cooldowns.freedomBlast = Math.max(cooldowns.freedomBlast || 0, 0.35);
     statusMsg = "Plunge!";
     statusTimer = 0.6;
+    if (isMultiplayer()) publishFx("plunge");
     console.log("[CBGame] plunge start");
     return true;
   }
@@ -1253,7 +1260,7 @@ window.CBGame = (function () {
     }
 
     const target = foe();
-    if (isMultiplayer()) syncMpFoeFromRemote();
+    if (isMultiplayer()) syncMpFoeFromRemote(dt);
     const foeHpBefore = target ? target.hp : 0;
 
     if (window.CBAllies) {
@@ -1481,7 +1488,20 @@ window.CBGame = (function () {
     if (!net || !net.connected || !net.roomCode) return;
     netSendTimer -= dt;
     if (netSendTimer > 0) return;
-    netSendTimer = 0.05;
+    netSendTimer = 0.033; // ~30 Hz
+    const ballId = player.id;
+    const hatId =
+      window.CBCountryballs && CBCountryballs.getHatId
+        ? CBCountryballs.getHatId(ballId)
+        : null;
+    const weaponId =
+      window.CBCountryballs && CBCountryballs.getWeaponId
+        ? CBCountryballs.getWeaponId(ballId)
+        : null;
+    const effectId =
+      window.CBCountryballs && CBCountryballs.getEffectId
+        ? CBCountryballs.getEffectId(ballId)
+        : null;
     if (CBNetClient.sendState) {
       CBNetClient.sendState({
         playerId: net.playerId,
@@ -1493,21 +1513,90 @@ window.CBGame = (function () {
         fighter: player.id,
         radius: player.radius,
         lives: playerLives,
+        aimX: player.aimX,
+        aimY: player.aimY,
+        hatId: hatId,
+        weaponId: weaponId,
+        effectId: effectId,
+        plunging: !!player.plunging,
         ts: Date.now(),
       });
     }
   }
 
-  function syncMpFoeFromRemote() {
+  function publishFx(kind, extra) {
+    if (!isMultiplayer() || !window.CBNetClient || !CBNetClient.sendFx || !player) return;
+    const net = CBNetClient.getState ? CBNetClient.getState() : null;
+    if (!net || !net.connected || !net.roomCode) return;
+    const ballId = player.id;
+    CBNetClient.sendFx(
+      Object.assign(
+        {
+          kind: kind,
+          playerId: net.playerId,
+          fighter: ballId,
+          x: player.x,
+          y: player.y,
+          aimX: player.aimX,
+          aimY: player.aimY,
+          facing: player.facing,
+          weaponId:
+            window.CBCountryballs && CBCountryballs.getWeaponId
+              ? CBCountryballs.getWeaponId(ballId)
+              : null,
+          effectId:
+            window.CBCountryballs && CBCountryballs.getEffectId
+              ? CBCountryballs.getEffectId(ballId)
+              : null,
+          ts: Date.now(),
+        },
+        extra || {}
+      )
+    );
+  }
+
+  function remoteWeaponImg(fighterId, weaponId) {
+    if (window.CBCosmetics && weaponId) {
+      const w = CBCosmetics.getWeapon(weaponId);
+      if (w && w._img && w._img.complete && w._img.naturalWidth) return w._img;
+    }
+    // Fall back to ability default art via a temporary follow entity cast path
+    if (fighterId === "japan" && window.CBJapanAbilities && CBJapanAbilities.getMeleeWeapon) {
+      const wpn = CBJapanAbilities.getMeleeWeapon({ id: "japan" });
+      return (wpn && wpn.img) || null;
+    }
+    if (fighterId === "russia" && window.CBRussiaAbilities && CBRussiaAbilities.getMeleeWeapon) {
+      const wpn = CBRussiaAbilities.getMeleeWeapon({ id: "russia" });
+      return (wpn && wpn.img) || null;
+    }
+    if (window.CBUsaAbilities && CBUsaAbilities.getMeleeWeapon) {
+      const wpn = CBUsaAbilities.getMeleeWeapon({ id: fighterId || "usa" });
+      return (wpn && wpn.img) || null;
+    }
+    return null;
+  }
+
+  function syncMpFoeFromRemote(dt) {
     if (!isMultiplayer() || !mpFoe || !remoteGhost) return;
-    mpFoe.x = remoteGhost.x;
-    mpFoe.y = remoteGhost.y;
+    const tx = remoteGhost.x;
+    const ty = remoteGhost.y;
+    mpFoe._tx = tx;
+    mpFoe._ty = ty;
+    // Smooth lerp — cuts visual stutter without adding input lag
+    const k = Math.min(1, (dt || 0.016) * 22);
+    mpFoe.x += (tx - mpFoe.x) * k;
+    mpFoe.y += (ty - mpFoe.y) * k;
     mpFoe.radius = remoteGhost.radius || mpFoe.radius;
     mpFoe.facing = remoteGhost.facing;
     mpFoe.fighter = remoteGhost.fighter || mpFoe.fighter;
     mpFoe.maxHp = remoteGhost.maxHp || mpFoe.maxHp;
-    // Authoritative HP comes from the remote player snapshot.
     mpFoe.hp = Math.max(0, remoteGhost.hp);
+    mpFoe.aimX = typeof remoteGhost.aimX === "number" ? remoteGhost.aimX : mpFoe.x + mpFoe.facing * 80;
+    mpFoe.aimY = typeof remoteGhost.aimY === "number" ? remoteGhost.aimY : mpFoe.y;
+    mpFoe.hatId = remoteGhost.hatId || null;
+    mpFoe.weaponId = remoteGhost.weaponId || null;
+    mpFoe.effectId = remoteGhost.effectId || null;
+    mpFoe.plunging = !!remoteGhost.plunging;
     if (mpFoe.flash > 0) mpFoe.flash -= 0.05;
   }
 
@@ -1529,9 +1618,21 @@ window.CBGame = (function () {
       radius: typeof s.radius === "number" ? s.radius : 42,
       lives: typeof s.lives === "number" ? s.lives : null,
       playerId: s.playerId || null,
+      aimX: typeof s.aimX === "number" ? s.aimX : s.x,
+      aimY: typeof s.aimY === "number" ? s.aimY : s.y,
+      hatId: s.hatId || null,
+      weaponId: s.weaponId || null,
+      effectId: s.effectId || null,
+      plunging: !!s.plunging,
       ts: typeof s.ts === "number" ? s.ts : Date.now(),
     };
     if (typeof s.lives === "number") foeLives = s.lives;
+    if (mpFoe && mpFoe._tx == null) {
+      mpFoe.x = s.x;
+      mpFoe.y = s.y;
+      mpFoe._tx = s.x;
+      mpFoe._ty = s.y;
+    }
   }
 
   function applyRemoteHit(payload) {
@@ -1544,9 +1645,147 @@ window.CBGame = (function () {
     player.flash = 0.35;
     invulnTimer = Math.max(invulnTimer, 0.28);
     player.invuln = true;
+    if (window.CBEffects && window.CBEffects.spawnShockwave) {
+      window.CBEffects.spawnShockwave(player.x, player.y, {
+        maxRadius: 70,
+        color: "rgba(255,255,255,0.45)",
+        width: 2.4,
+        life: 0.22,
+      });
+    }
     console.log(
       "[CBGame] remote hit dmg=" + amount + " hp " + before + "->" + player.hp
     );
+  }
+
+  function applyRemoteFx(payload) {
+    if (!isMultiplayer() || !mpFoe || !window.CBEffects) return;
+    const p = payload || {};
+    const kind = p.kind;
+    if (!kind) return;
+    // Keep rival pose in sync for follow-based weapon FX
+    if (typeof p.x === "number") {
+      mpFoe.x = p.x;
+      mpFoe._tx = p.x;
+    }
+    if (typeof p.y === "number") {
+      mpFoe.y = p.y;
+      mpFoe._ty = p.y;
+    }
+    if (typeof p.aimX === "number") mpFoe.aimX = p.aimX;
+    if (typeof p.aimY === "number") mpFoe.aimY = p.aimY;
+    if (typeof p.facing === "number") mpFoe.facing = p.facing >= 0 ? 1 : -1;
+    if (p.fighter) mpFoe.fighter = p.fighter;
+    if (p.weaponId) mpFoe.weaponId = p.weaponId;
+    if (p.effectId) mpFoe.effectId = p.effectId;
+
+    const fighter = mpFoe.fighter || "usa";
+    const img = remoteWeaponImg(fighter, mpFoe.weaponId);
+    const aimX = mpFoe.aimX;
+    const aimY = mpFoe.aimY;
+    const follow = mpFoe;
+
+    if (kind === "bash") {
+      if (fighter === "japan" && CBEffects.spawnKatanaStrike) {
+        CBEffects.spawnKatanaStrike({
+          follow: follow,
+          img: img,
+          aimX: aimX,
+          aimY: aimY,
+          damage: 0,
+          ownerId: "remote-fx",
+        });
+      } else if (fighter === "russia" && CBEffects.spawnDeagleBash) {
+        CBEffects.spawnDeagleBash({
+          follow: follow,
+          img: img,
+          aimX: aimX,
+          aimY: aimY,
+          damage: 0,
+          ownerId: "remote-fx",
+        });
+      } else if (CBEffects.spawnDeagleBash) {
+        CBEffects.spawnDeagleBash({
+          follow: follow,
+          img: img,
+          aimX: aimX,
+          aimY: aimY,
+          damage: 0,
+          ownerId: "remote-fx",
+        });
+      }
+      return;
+    }
+    if (kind === "charged") {
+      if (fighter === "japan" && CBEffects.spawnKatanaCharge) {
+        CBEffects.spawnKatanaCharge({
+          follow: follow,
+          img: img,
+          aimX: aimX,
+          aimY: aimY,
+          damage: 0,
+          ownerId: "remote-fx",
+        });
+      } else if (CBEffects.spawnDeagleSpin) {
+        CBEffects.spawnDeagleSpin({
+          follow: follow,
+          img: img,
+          aimX: aimX,
+          aimY: aimY,
+          damage: 0,
+          ownerId: "remote-fx",
+        });
+      }
+      return;
+    }
+    if (kind === "special") {
+      if (CBEffects.spawnBurst) {
+        CBEffects.spawnBurst(aimX, aimY, 14, ["#ffffff", "#f0c43a", "#b22234"]);
+      }
+      if (CBEffects.spawnShockwave) {
+        CBEffects.spawnShockwave(mpFoe.x, mpFoe.y, {
+          maxRadius: 90,
+          color: "rgba(255,255,255,0.4)",
+          width: 2.5,
+          life: 0.28,
+        });
+      }
+      return;
+    }
+    if (kind === "ult") {
+      if (CBEffects.spawnBurst) {
+        CBEffects.spawnBurst(mpFoe.x, mpFoe.y, 22, ["#f0c43a", "#ffffff", "#ff4d4d"]);
+      }
+      if (CBEffects.spawnShockwave) {
+        CBEffects.spawnShockwave(mpFoe.x, mpFoe.y, {
+          maxRadius: 140,
+          color: "rgba(240,196,58,0.5)",
+          width: 3,
+          life: 0.35,
+        });
+      }
+      return;
+    }
+    if (kind === "plunge") {
+      if (CBEffects.spawnPlungeAttack) {
+        CBEffects.spawnPlungeAttack({
+          follow: follow,
+          img: img,
+          aimX: mpFoe.x,
+          aimY: mpFoe.y + 40,
+          damage: 0,
+          ownerId: "remote-fx",
+        });
+      }
+      if (CBEffects.spawnShockwave) {
+        CBEffects.spawnShockwave(mpFoe.x, mpFoe.y + 20, {
+          maxRadius: 110,
+          color: "rgba(255,255,255,0.5)",
+          width: 3,
+          life: 0.3,
+        });
+      }
+    }
   }
 
   function flushMpHits(foeHpBefore) {
@@ -1596,6 +1835,125 @@ window.CBGame = (function () {
     ctx.font = "12px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(label, ent.x, y - 4);
+  }
+
+  function drawRemoteRival(sil) {
+    if (!mpFoe) return;
+    const gx = mpFoe.x;
+    const gy = mpFoe.y;
+    const gr = mpFoe.radius || 42;
+    const facing = mpFoe.facing >= 0 ? 1 : -1;
+    const auraId = mpFoe.effectId;
+    const auraOn = !!(auraId && auraId !== "none");
+    let floatY = 0;
+    if (auraOn) {
+      const floatAmp =
+        auraId === "void_shroud" ? 2.1 : auraId === "solar_aegis" ? 1.8 : 2.5;
+      const floatBase =
+        auraId === "void_shroud" ? -5 : auraId === "solar_aegis" ? -4 : -7;
+      const floatSpeed =
+        auraId === "uncle_sam" ? 3.6 : auraId === "void_shroud" ? 2.5 : 3.1;
+      floatY = floatBase + Math.sin(timeSec * floatSpeed) * floatAmp;
+    }
+    const cy = gy + floatY;
+
+    if (auraOn && !sil) {
+      ctx.save();
+      const rot = facing < 0 ? Math.PI : 0;
+      if (auraId === "uncle_sam") {
+        drawAuraGlow(gx, cy, gr * 2.75, gr * 1.82, rot, [
+          [0, "rgba(255, 255, 255, 0.34)"],
+          [0.36, "rgba(31, 75, 165, 0.24)"],
+          [0.68, "rgba(215, 38, 61, 0.21)"],
+          [1, "rgba(122, 0, 20, 0)"],
+        ]);
+      } else if (auraId === "void_shroud") {
+        drawAuraGlow(gx, cy, gr * 2.55, gr * 1.62, rot + 0.45, [
+          [0, "rgba(226, 204, 255, 0.22)"],
+          [0.42, "rgba(95, 42, 138, 0.23)"],
+          [0.8, "rgba(42, 10, 66, 0.2)"],
+          [1, "rgba(16, 8, 24, 0)"],
+        ]);
+      } else if (auraId === "solar_aegis") {
+        drawAuraGlow(gx, cy, gr * 2.15, gr * 2.65, rot - 0.15, [
+          [0, "rgba(255, 249, 232, 0.4)"],
+          [0.45, "rgba(255, 215, 106, 0.26)"],
+          [0.78, "rgba(246, 183, 60, 0.2)"],
+          [1, "rgba(201, 134, 26, 0)"],
+        ]);
+      } else if (auraId === "wrath_of_the_gods") {
+        drawAuraGlow(gx, cy, gr * 2.5, gr * 1.75, rot, [
+          [0, "rgba(255, 50, 50, 0.4)"],
+          [0.55, "rgba(200, 0, 0, 0.18)"],
+          [1, "rgba(180, 0, 0, 0)"],
+        ]);
+      }
+      ctx.restore();
+    }
+
+    const gImg = fighterImgById(mpFoe.fighter || "usa");
+    if (gImg && gImg.complete) {
+      const sz = gr * 2;
+      ctx.save();
+      ctx.translate(gx, cy);
+      if (facing < 0) ctx.scale(-1, 1);
+      if (sil) ctx.filter = "brightness(0)";
+      ctx.drawImage(gImg, -sz / 2, -sz / 2, sz, sz);
+      if (
+        !sil &&
+        window.CBCosmetics &&
+        mpFoe.hatId
+      ) {
+        const hat = CBCosmetics.getHat(mpFoe.hatId);
+        const himg = hat && hat._img;
+        if (hat && himg && himg.complete && himg.naturalWidth) {
+          const aspect = himg.naturalWidth / himg.naturalHeight;
+          const w = gr * 2 * hat.scale;
+          const hh = w / aspect;
+          const nudge =
+            CBCosmetics.fighterHatNudge
+              ? CBCosmetics.fighterHatNudge(mpFoe.fighter)
+              : { ox: 0, oy: 0 };
+          const hx = (hat.ox + nudge.ox) * gr - w / 2;
+          const hy = (hat.oy + nudge.oy) * gr - hh / 2;
+          ctx.drawImage(himg, hx, hy, w, hh);
+        }
+      }
+      ctx.filter = "none";
+      ctx.restore();
+    } else {
+      drawEntityCircle({ x: gx, y: cy, radius: gr, flash: 0 }, "#8aa0c7");
+    }
+
+    // Idle aimed weapon (visible between attacks)
+    if (!sil && !mpFoe.plunging) {
+      const img = remoteWeaponImg(mpFoe.fighter, mpFoe.weaponId);
+      if (img && img.complete && img.naturalWidth) {
+        const aimX = typeof mpFoe.aimX === "number" ? mpFoe.aimX : gx + facing * 80;
+        const aimY = typeof mpFoe.aimY === "number" ? mpFoe.aimY : cy;
+        const dx = aimX - gx;
+        const dy = aimY - cy;
+        const ang = Math.atan2(dy, dx);
+        const handDist = gr * 0.5;
+        const hx = gx + Math.cos(ang) * handDist;
+        const hy = cy + Math.sin(ang) * handDist;
+        const ww = mpFoe.fighter === "japan" ? 78 : 68;
+        const wh = mpFoe.fighter === "japan" ? 22 : mpFoe.fighter === "russia" ? 52 : 37;
+        ctx.save();
+        ctx.translate(hx, hy);
+        ctx.rotate(ang);
+        ctx.drawImage(img, -ww * 0.34, -wh * 0.55, ww, wh);
+        ctx.restore();
+      }
+    }
+
+    if (mpFoe.flash > 0 && !sil) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.8, mpFoe.flash * 4)})`;
+      ctx.beginPath();
+      ctx.arc(gx, cy, gr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (!sil) drawHpBar({ x: gx, y: cy, radius: gr, hp: mpFoe.hp, maxHp: mpFoe.maxHp }, "Rival");
   }
 
   function drawUltBar() {
@@ -1747,27 +2105,7 @@ window.CBGame = (function () {
     if (isMultiplayer() && mpFoe && !sil) {
       const ageOk = !remoteGhost || Date.now() - (remoteGhost.ts || 0) < 2500;
       if (ageOk) {
-        const gImg = fighterImgById(mpFoe.fighter || (remoteGhost && remoteGhost.fighter));
-        const gx = mpFoe.x;
-        const gy = mpFoe.y;
-        const gr = mpFoe.radius || 42;
-        if (gImg && gImg.complete) {
-          const sz = gr * 2;
-          ctx.save();
-          ctx.translate(gx, gy);
-          if ((mpFoe.facing || -1) < 0) ctx.scale(-1, 1);
-          ctx.drawImage(gImg, -sz / 2, -sz / 2, sz, sz);
-          ctx.restore();
-        } else {
-          drawEntityCircle(mpFoe, "#8aa0c7");
-        }
-        if (mpFoe.flash > 0) {
-          ctx.fillStyle = `rgba(255,255,255,${Math.min(0.8, mpFoe.flash * 4)})`;
-          ctx.beginPath();
-          ctx.arc(gx, gy, gr, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        drawHpBar(mpFoe, "Rival");
+        drawRemoteRival(sil);
       }
     }
 
@@ -2113,6 +2451,7 @@ window.CBGame = (function () {
     stop,
     setRemoteSnapshot: setRemoteSnapshot,
     applyRemoteHit: applyRemoteHit,
+    applyRemoteFx: applyRemoteFx,
     clearRemoteSnapshot: function () {
       remoteGhost = null;
       mpFoe = null;

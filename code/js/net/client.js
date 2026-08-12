@@ -235,6 +235,10 @@ window.CBNetClient = (function () {
     return send("hit", hit || {});
   }
 
+  function sendFx(fx) {
+    return send("fx", fx || {});
+  }
+
   function getState() {
     return Object.assign({}, state);
   }
@@ -252,6 +256,7 @@ window.CBNetClient = (function () {
     sendState: sendState,
     sendInput: sendInput,
     sendHit: sendHit,
+    sendFx: sendFx,
     getState: getState,
   };
 })();

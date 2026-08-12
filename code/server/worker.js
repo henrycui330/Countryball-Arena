@@ -325,7 +325,7 @@ export class RoomServer {
       await this.handleStartMatch(ws, peer, payload);
       return;
     }
-    if (type === "state" || type === "input" || type === "hit") {
+    if (type === "state" || type === "input" || type === "hit" || type === "fx") {
       if (!peer.roomCode) return;
       this.broadcastOthers(peer.roomCode, ws, type, payload);
       return;

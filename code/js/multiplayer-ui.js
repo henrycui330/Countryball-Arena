@@ -222,6 +222,10 @@ window.CBMultiplayerUI = (function () {
         }
         if (t === "hit") {
           if (window.CBGame && CBGame.applyRemoteHit) CBGame.applyRemoteHit(p);
+          return;
+        }
+        if (t === "fx") {
+          if (window.CBGame && CBGame.applyRemoteFx) CBGame.applyRemoteFx(p);
         }
       },
     });

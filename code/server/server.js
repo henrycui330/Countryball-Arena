@@ -238,7 +238,7 @@ function handleMessage(ws, raw) {
   if (type === "ready") return handleReady(ws, payload);
   if (type === "set_loadout") return handleSetLoadout(ws, payload);
   if (type === "start_match") return handleStartMatch(ws, payload);
-  if (type === "state" || type === "input" || type === "hit") {
+  if (type === "state" || type === "input" || type === "hit" || type === "fx") {
     const peer = peers.get(ws);
     if (!peer || !peer.roomCode) return;
     const room = rooms.get(peer.roomCode);
