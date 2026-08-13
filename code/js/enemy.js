@@ -231,6 +231,14 @@ window.CBBotPhysics = (function () {
   return { apply, groundMoveX };
 })();
 
+function wineMoveMult(ent) {
+  if (!ent || ent.id === "france") return 1;
+  if (window.CBEffects && typeof CBEffects.wineSlowAt === "function") {
+    if (CBEffects.wineSlowAt(ent.x, ent.y)) return 0.5;
+  }
+  return 1;
+}
+
 window.CBEasyEnemy = (function () {
   const MOVE_SPEED = 95;
   const PREFERRED_DIST = 200;
@@ -302,7 +310,7 @@ window.CBEasyEnemy = (function () {
       ent.strafeDir
     );
     if (mx !== 0) {
-      ent.x += mx * MOVE_SPEED * dt;
+      ent.x += mx * MOVE_SPEED * wineMoveMult(ent) * dt;
       ent.facing = mx > 0 ? 1 : -1;
     }
     window.CBBotPhysics.apply(ent, dt, W, H, map);
@@ -458,7 +466,7 @@ window.CBMediumEnemy = (function () {
       ent.strafeDir
     );
     if (mx !== 0) {
-      ent.x += mx * MOVE_SPEED * dt;
+      ent.x += mx * MOVE_SPEED * wineMoveMult(ent) * dt;
       ent.facing = mx > 0 ? 1 : -1;
     }
     window.CBBotPhysics.apply(ent, dt, W, H, map);
@@ -636,7 +644,7 @@ window.CBHardEnemy = (function () {
         ent.strafeDir
       );
       if (mx !== 0) {
-        ent.x += mx * MOVE_SPEED * dt;
+        ent.x += mx * MOVE_SPEED * wineMoveMult(ent) * dt;
         ent.facing = mx > 0 ? 1 : -1;
       }
     }

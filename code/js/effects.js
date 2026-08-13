@@ -36,10 +36,12 @@ window.CBEffects = (function () {
           e.type === "deagleBash" ||
           e.type === "deagleSpin" ||
           e.type === "eagleFly" ||
+          e.type === "warship" ||
           e.type === "katanaStrike" ||
           e.type === "katanaCharge" ||
           e.type === "japanUlt" ||
-          e.type === "vodkaBarrage")
+          e.type === "vodkaBarrage" ||
+          (e.type === "baguetteMissile" && e.phase === "dive"))
       );
     });
   }
@@ -169,6 +171,53 @@ window.CBEffects = (function () {
     console.log("[CBEffects] explosion at", Math.round(x), Math.round(y), "power=" + power);
   }
 
+  /** Particles rush inward (Void KO). */
+  function spawnImplosion(x, y, opts) {
+    const o = opts || {};
+    const power = o.power ?? 1;
+    const colors = o.colors || ["#2a0a42", "#5f2a8a", "#a66bff", "#1a0c26", "#e2ccff"];
+    const n = 28 + Math.floor(power * 16);
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 36 + Math.random() * 95 * power;
+      const px = x + Math.cos(ang) * dist;
+      const py = y + Math.sin(ang) * dist;
+      spawnParticle(px, py, {
+        vx: (x - px) * 3.4,
+        vy: (y - py) * 3.4,
+        life: 0.32 + Math.random() * 0.28,
+        size: 3 + Math.random() * 4,
+        color: colors[i % colors.length],
+        gravity: 0,
+      });
+    }
+    spawnShockwave(x, y, {
+      color: o.ring || "rgba(166,107,255,0.55)",
+      maxRadius: 88 * power,
+      life: 0.34,
+    });
+    console.log("[CBEffects] implosion at", Math.round(x), Math.round(y));
+  }
+
+  /** Star-like burst (Uncle Sam KO). */
+  function spawnStarBurst(x, y, opts) {
+    const o = opts || {};
+    const colors = o.colors || ["#d7263d", "#ffffff", "#1f4ba5", "#f5f7ff"];
+    const n = o.count ?? 20;
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+      const spd = 150 + Math.random() * 200;
+      spawnParticle(x, y, {
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd - 50,
+        life: 0.45 + Math.random() * 0.35,
+        size: 3 + Math.random() * 4,
+        color: colors[i % colors.length],
+        gravity: 50,
+      });
+    }
+  }
+
   /** Expanding impact ring (plunge / heavy hits). */
   function spawnShockwave(x, y, opts) {
     const o = opts || {};
@@ -183,6 +232,100 @@ window.CBEffects = (function () {
       maxRadius: o.maxRadius ?? 130,
       color: o.color || "rgba(255,255,255,0.75)",
       width: o.width ?? 3.5,
+    });
+  }
+
+  /** Floor puddle — slows anyone standing in it except France (checked by caller). */
+  function spawnWineSpill(opts) {
+    const o = opts || {};
+    const life = o.life ?? 5;
+    console.log(
+      "[CBEffects] wine spill at",
+      Math.round(o.x || 0),
+      Math.round(o.y || 0)
+    );
+    return add({
+      type: "winePuddle",
+      x: o.x ?? 0,
+      y: o.y ?? 0,
+      rx: o.rx ?? 130,
+      ry: o.ry ?? 38,
+      life: life,
+      maxLife: life,
+      ownerId: o.ownerId || null,
+    });
+  }
+
+  function wineSlowAt(x, y) {
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e.type !== "winePuddle" || e.life <= 0) continue;
+      const dx = (x - e.x) / (e.rx || 130);
+      const dy = (y - e.y) / (e.ry || 38);
+      if (dx * dx + dy * dy <= 1) return true;
+    }
+    return false;
+  }
+
+  function inAcidRain(x, y) {
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e.type !== "acidRain" || e.life <= 0) continue;
+      const dx = (x - e.x) / (e.rx || 155);
+      const dy = (y - e.y) / (e.ry || 110);
+      if (dx * dx + dy * dy <= 1) return true;
+    }
+    return false;
+  }
+
+  function spawnAcidRain(opts) {
+    const o = opts || {};
+    const life = o.life ?? 5;
+    console.log("[CBEffects] acid rain at", Math.round(o.x || 0), Math.round(o.y || 0));
+    return add({
+      type: "acidRain",
+      x: o.x ?? 0,
+      y: o.y ?? 0,
+      rx: o.rx ?? 155,
+      ry: o.ry ?? 110,
+      life: life,
+      maxLife: life,
+      tick: o.tick ?? 0.38,
+      tickLeft: 0.12,
+      damage: o.damage ?? 7,
+      ownerId: o.ownerId || null,
+      drops: [],
+    });
+  }
+
+  function spawnWarship(opts) {
+    const o = opts || {};
+    const w = o.w ?? 2240;
+    const h = o.h ?? 840;
+    const vx = o.vx ?? 420;
+    const life =
+      o.life != null
+        ? o.life
+        : (960 + w) / Math.max(180, Math.abs(vx)) + 0.8;
+    console.log("[CBEffects] warship vx=" + vx + " size=" + w + "x" + h);
+    return add({
+      type: "warship",
+      x: o.x ?? -1000,
+      y: (o.groundY ?? 360) - h * 0.18,
+      groundY: o.groundY ?? 360,
+      vx: vx,
+      vy: 0,
+      w: w,
+      h: h,
+      hitH: o.hitH ?? 92,
+      facing: o.facing >= 0 ? 1 : -1,
+      img: o.img || null,
+      life: life,
+      maxLife: life,
+      damage: o.damage ?? 80,
+      ownerId: o.ownerId || null,
+      finisher: !!o.finisher,
+      hitIds: {},
     });
   }
 
@@ -489,6 +632,51 @@ window.CBEffects = (function () {
       target: o.target || null,
       turnRate: o.turnRate ?? 5,
       finisher: !!o.finisher,
+    });
+  }
+
+  function badFuse() {
+    const r = Math.random();
+    if (r < 0.12) return 1.7 + Math.random() * 0.7; // almost a dud, then pops
+    if (r < 0.45) return 0.22 + Math.random() * 0.28; // hair-trigger
+    return 0.55 + Math.random() * 0.85;
+  }
+
+  /**
+   * Dive into the floor, stick like a missile, then explode after a bad fuse.
+   */
+  function spawnBaguetteMissile(opts) {
+    const o = opts || {};
+    const fuse = o.fuse != null ? o.fuse : badFuse();
+    const delay = o.delay || 0;
+    console.log(
+      "[CBEffects] baguette missile fuse=" + fuse.toFixed(2) + "s delay=" + delay.toFixed(2)
+    );
+    return add({
+      type: "baguetteMissile",
+      phase: delay > 0 ? "wait" : "dive",
+      wait: delay,
+      x: o.x ?? 0,
+      y: o.y ?? 0,
+      vx: o.vx ?? 0,
+      vy: o.vy ?? 260,
+      impactX: o.impactX ?? o.x ?? 0,
+      groundY: o.groundY ?? 360,
+      life: 5.5,
+      maxLife: 5.5,
+      fuse: fuse,
+      fuseLeft: fuse,
+      img: o.img || null,
+      w: o.w ?? 150,
+      h: o.h ?? 48,
+      rot: Math.PI * 0.55,
+      radius: o.radius ?? 62,
+      damage: o.damage ?? 38,
+      ownerId: o.ownerId || null,
+      finisher: !!o.finisher,
+      bury: 0,
+      shake: 0,
+      hit: false,
     });
   }
 
@@ -1336,8 +1524,210 @@ window.CBEffects = (function () {
         }
       }
 
+      if (e.type === "acidRain") {
+        e.tickLeft = (e.tickLeft || 0) - dt;
+        if (!e.drops) e.drops = [];
+        for (let n = 0; n < 5; n++) {
+          if (e.drops.length >= 56) break;
+          e.drops.push({
+            x: e.x + (Math.random() - 0.5) * e.rx * 1.9,
+            y: e.y - e.ry - 8 - Math.random() * 70,
+            vx: (Math.random() - 0.5) * 22,
+            vy: 320 + Math.random() * 220,
+            len: 10 + Math.random() * 16,
+          });
+        }
+        for (let i = e.drops.length - 1; i >= 0; i--) {
+          const d = e.drops[i];
+          d.x += d.vx * dt;
+          d.y += d.vy * dt;
+          if (d.y > e.y + e.ry * 0.55) e.drops.splice(i, 1);
+        }
+        if (Math.random() > 0.45) {
+          const px = e.x + (Math.random() - 0.5) * e.rx * 1.6;
+          spawnParticle(px, e.y + e.ry * 0.35, {
+            vx: (Math.random() - 0.5) * 24,
+            vy: -20 - Math.random() * 30,
+            life: 0.28,
+            size: 2 + Math.random() * 2,
+            color: Math.random() > 0.5 ? "#b8ff3a" : "#7ad318",
+            gravity: 40,
+          });
+        }
+        if (e.tickLeft <= 0) {
+          e.tickLeft = e.tick || 0.38;
+          for (const t of targets) {
+            if (t.id === e.ownerId || t.id === "uk" || t.hp <= 0) continue;
+            if (t.ownerId && t.ownerId === e.ownerId) continue;
+            if (t.invuln) continue;
+            const dx = (t.x - e.x) / (e.rx || 155);
+            const dy = (t.y - e.y) / (e.ry || 110);
+            if (dx * dx + dy * dy > 1) continue;
+            t.hp = Math.max(0, t.hp - (e.damage || 7));
+            t.flash = 0.16;
+            spawnParticle(t.x, t.y - 8, {
+              vx: (Math.random() - 0.5) * 30,
+              vy: -40,
+              life: 0.22,
+              size: 3,
+              color: "#b8ff3a",
+            });
+            console.log(
+              "[CBEffects] acid rain tick " + t.id + " hp=" + t.hp
+            );
+          }
+        }
+      }
+
+      if (e.type === "warship") {
+        e.x += e.vx * dt;
+        const visHalf = (e.w || 2240) * 0.5;
+        if (
+          window.CBCamera &&
+          CBCamera.addShake &&
+          e.x + visHalf > 0 &&
+          e.x - visHalf < 960
+        ) {
+          CBCamera.addShake(0.72);
+        }
+        const halfW = (e.w || 2240) * 0.42;
+        const left = e.x - halfW;
+        const right = e.x + halfW;
+        const top = e.groundY - (e.hitH || 92);
+        const bot = e.groundY + 18;
+        if (!e.hitIds) e.hitIds = {};
+        for (const t of targets) {
+          if (t.id === e.ownerId || t.hp <= 0) continue;
+          if (t.ownerId && t.ownerId === e.ownerId) continue;
+          if (t.invuln) continue;
+          if (e.hitIds[t.id]) continue;
+          const tx = t.x;
+          const ty = t.y;
+          if (tx < left || tx > right) continue;
+          if (ty + (t.radius || 30) < top) continue;
+          if (ty - (t.radius || 30) > bot) continue;
+          e.hitIds[t.id] = true;
+          t.hp = Math.max(0, t.hp - (e.damage || 80));
+          t.flash = 0.4;
+          t.x += (e.vx >= 0 ? 1 : -1) * 48;
+          spawnBurst(t.x, t.y, 18, ["#c8102e", "#012169", "#ffffff", "#888"]);
+          spawnShockwave(t.x, e.groundY, {
+            color: "rgba(1,33,105,0.55)",
+            maxRadius: 90,
+            life: 0.3,
+          });
+          if (window.CBCamera && CBCamera.addShake) CBCamera.addShake(0.95);
+          console.log(
+            "[CBEffects] warship hit " + t.id + " for " + e.damage + " (hp=" + t.hp + ")"
+          );
+        }
+      }
+
       if (e.type === "finisherCross") {
         /* drawn only; onDone fires on expire */
+      }
+
+      if (e.type === "baguetteMissile") {
+        if (e.phase === "wait") {
+          e.wait -= dt;
+          if (e.wait <= 0) e.phase = "dive";
+        } else if (e.phase === "dive") {
+          const tx = e.impactX - e.x;
+          const ty = e.groundY - 8 - e.y;
+          const desired = Math.atan2(ty, tx);
+          const speed = Math.max(320, Math.hypot(e.vx, e.vy) + 900 * dt);
+          let cur = Math.atan2(e.vy, e.vx);
+          let diff = desired - cur;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          const maxTurn = 8 * dt;
+          if (diff > maxTurn) diff = maxTurn;
+          if (diff < -maxTurn) diff = -maxTurn;
+          cur += diff;
+          e.vx = Math.cos(cur) * speed;
+          e.vy = Math.sin(cur) * speed;
+          e.x += e.vx * dt;
+          e.y += e.vy * dt;
+          e.rot = cur;
+          if (e.y >= e.groundY - 6) {
+            e.x = e.impactX + (Math.random() - 0.5) * 10;
+            e.y = e.groundY + 4;
+            e.vx = 0;
+            e.vy = 0;
+            e.phase = "stuck";
+            e.rot = 1.05 + (Math.random() - 0.5) * 0.5;
+            e.bury = 0;
+            spawnShockwave(e.x, e.groundY, {
+              color: "rgba(120, 72, 32, 0.7)",
+              maxRadius: 70,
+              life: 0.28,
+            });
+            spawnBurst(e.x, e.groundY, 10, ["#6b3f1f", "#c4a574", "#3d2412"]);
+            console.log(
+              "[CBEffects] baguette planted x=" +
+                Math.round(e.x) +
+                " fuse=" +
+                e.fuseLeft.toFixed(2)
+            );
+          }
+        } else if (e.phase === "stuck") {
+          e.bury = Math.min(1, (e.bury || 0) + dt * 2.8);
+          e.y = e.groundY + 6 + e.bury * 22;
+          e.fuseLeft -= dt;
+          const tick = e.fuseLeft < 0.35 ? 28 : 10;
+          e.shake = Math.sin((e.fuse || 1) * 40 + e.fuseLeft * tick) * (e.fuseLeft < 0.3 ? 5 : 1.5);
+          if (Math.random() > 0.7) {
+            spawnParticle(e.x + (Math.random() - 0.5) * 12, e.groundY - 4, {
+              vx: (Math.random() - 0.5) * 20,
+              vy: -20 - Math.random() * 30,
+              life: 0.2,
+              size: 2,
+              color: "#c4a574",
+              gravity: 80,
+            });
+          }
+          if (e.fuseLeft <= 0) {
+            e.phase = "boom";
+            e.hit = true;
+            const boomX = e.x;
+            const boomY = e.groundY - 8;
+            if (typeof spawnExplosion === "function") {
+              spawnExplosion(boomX, boomY, {
+                power: 1.15,
+                colors: ["#ed2939", "#6b0f1a", "#c4a574", "#ffffff", "#002395"],
+              });
+            } else {
+              spawnBurst(boomX, boomY, 22, ["#ed2939", "#ffffff", "#6b3f1f"]);
+            }
+            spawnShockwave(boomX, boomY, {
+              color: "rgba(237,41,57,0.7)",
+              maxRadius: 120,
+              life: 0.38,
+            });
+            for (const t of targets) {
+              if (t.id === e.ownerId || t.hp <= 0) continue;
+              if (t.ownerId && t.ownerId === e.ownerId) continue;
+              if (t.invuln) continue;
+              const dx = t.x - boomX;
+              const dy = t.y - boomY;
+              const rr = (e.radius || 62) + (t.radius || 30);
+              if (dx * dx + dy * dy <= rr * rr) {
+                t.hp = Math.max(0, t.hp - (e.damage || 0));
+                t.flash = 0.28;
+                console.log(
+                  "[CBEffects] baguette fuse hit " +
+                    t.id +
+                    " for " +
+                    e.damage +
+                    " (hp=" +
+                    t.hp +
+                    ")"
+                );
+              }
+            }
+            e.life = 0;
+          }
+        }
       }
 
       if (
@@ -1507,18 +1897,68 @@ window.CBEffects = (function () {
           ctx.fill();
         }
         ctx.restore();
-      } else if (e.type === "spriteProjectile") {
+      } else if (e.type === "acidRain") {
+        const fade = Math.min(1, e.life / 0.5);
+        ctx.save();
+        ctx.globalAlpha = 0.22 * fade;
+        ctx.fillStyle = "rgba(140, 220, 40, 0.5)";
+        ctx.beginPath();
+        ctx.ellipse(e.x, e.y, e.rx, e.ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.75 * fade;
+        ctx.strokeStyle = "#c6ff4a";
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = "round";
+        const drops = e.drops || [];
+        for (let i = 0; i < drops.length; i++) {
+          const d = drops[i];
+          ctx.beginPath();
+          ctx.moveTo(d.x, d.y);
+          ctx.lineTo(d.x + d.vx * 0.03, d.y + (d.len || 12));
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else if (e.type === "warship") {
+        ctx.save();
+        ctx.globalAlpha = 0.32 * Math.min(1, e.life / 0.35);
+        ctx.fillStyle = "rgba(170, 205, 230, 0.85)";
+        ctx.beginPath();
+        ctx.ellipse(e.x, e.groundY + 8, (e.w || 560) * 0.4, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, e.life / 0.35);
+        ctx.translate(e.x, e.y);
+        if (e.facing < 0) ctx.scale(-1, 1);
+        if (e.img && e.img.complete && e.img.naturalWidth) {
+          ctx.drawImage(e.img, -e.w / 2, -e.h / 2, e.w, e.h);
+        } else {
+          ctx.fillStyle = "#555";
+          ctx.fillRect(-e.w / 2, -e.h / 2, e.w, e.h);
+        }
+        ctx.restore();
+      } else if (e.type === "spriteProjectile" || e.type === "baguetteMissile") {
         ctx.save();
         ctx.globalAlpha = alpha;
-        ctx.translate(e.x, e.y);
+        const ox = e.type === "baguetteMissile" ? e.shake || 0 : 0;
+        ctx.translate(e.x + ox, e.y);
         ctx.rotate(e.rot);
         if (e.img && e.img.complete && e.img.naturalWidth) {
           ctx.drawImage(e.img, -e.w / 2, -e.h / 2, e.w, e.h);
         } else {
-          ctx.fillStyle = "#2e7d32";
+          ctx.fillStyle = "#c4a574";
           ctx.fillRect(-e.w / 2, -e.h / 2, e.w, e.h);
         }
         ctx.restore();
+        if (e.type === "baguetteMissile" && e.phase === "stuck") {
+          ctx.save();
+          ctx.globalAlpha = 0.55 * alpha;
+          ctx.fillStyle = "#5a3a1c";
+          ctx.beginPath();
+          ctx.ellipse(e.x, e.groundY + 2, 18 + e.bury * 10, 7, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       } else if (e.type === "wrathBolt") {
         ctx.save();
         ctx.globalAlpha = alpha;
@@ -1555,6 +1995,28 @@ window.CBEffects = (function () {
           ctx.stroke();
         });
         ctx.restore();
+      } else if (e.type === "winePuddle") {
+        const fade = Math.min(1, e.life / 0.6);
+        const born = 1 - Math.max(0, e.life) / (e.maxLife || 5);
+        const grow = Math.min(1, born * 4);
+        ctx.save();
+        ctx.globalAlpha = 0.72 * fade;
+        ctx.translate(e.x, e.y);
+        ctx.scale(grow, grow);
+        ctx.fillStyle = "rgba(90, 12, 24, 0.82)";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, e.rx, e.ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(140, 20, 40, 0.7)";
+        ctx.beginPath();
+        ctx.ellipse(-e.rx * 0.15, -e.ry * 0.12, e.rx * 0.62, e.ry * 0.48, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(40, 6, 12, 0.55)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, e.rx, e.ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       } else if (e.type === "shockwave") {
         const prog = 1 - Math.max(0, e.life) / (e.maxLife || 0.42);
         const rr = e.radius + (e.maxRadius - e.radius) * prog;
@@ -1580,7 +2042,14 @@ window.CBEffects = (function () {
     spawnStar,
     spawnBurst,
     spawnExplosion,
+    spawnImplosion,
+    spawnStarBurst,
     spawnShockwave,
+    spawnWineSpill,
+    wineSlowAt,
+    spawnAcidRain,
+    inAcidRain,
+    spawnWarship,
     spawnWrathLightning,
     spawnFinisherCross,
     spawnDeagleSpin,
@@ -1593,6 +2062,7 @@ window.CBEffects = (function () {
     spawnJapanCinemaUlt,
     spawnEagleFlyby,
     spawnSpriteProjectile,
+    spawnBaguetteMissile,
     getCinema,
     getFinishers,
     getPrimaryFinisher,

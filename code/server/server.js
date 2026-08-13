@@ -102,7 +102,7 @@ function handleCreateRoom(ws, payload) {
   rooms.set(code, room);
   peer.roomCode = code;
   peer.ready = false;
-  if (payload?.fighter === "usa" || payload?.fighter === "japan" || payload?.fighter === "russia") {
+  if (payload?.fighter === "usa" || payload?.fighter === "japan" || payload?.fighter === "russia" || payload?.fighter === "france" || payload?.fighter === "uk") {
     peer.fighter = payload.fighter;
   }
   if (typeof payload?.name === "string" && payload.name.trim()) {
@@ -140,7 +140,7 @@ function handleJoinRoom(ws, payload) {
   room.members.add(ws);
   peer.roomCode = code;
   peer.ready = false;
-  if (payload?.fighter === "usa" || payload?.fighter === "japan" || payload?.fighter === "russia") {
+  if (payload?.fighter === "usa" || payload?.fighter === "japan" || payload?.fighter === "russia" || payload?.fighter === "france" || payload?.fighter === "uk") {
     peer.fighter = payload.fighter;
   }
   if (typeof payload?.name === "string" && payload.name.trim()) {
@@ -171,7 +171,7 @@ function handleReady(ws, payload) {
 function handleSetLoadout(ws, payload) {
   const peer = peers.get(ws);
   if (!peer) return;
-  if (payload?.fighter === "usa" || payload?.fighter === "japan" || payload?.fighter === "russia") {
+  if (payload?.fighter === "usa" || payload?.fighter === "japan" || payload?.fighter === "russia" || payload?.fighter === "france" || payload?.fighter === "uk") {
     peer.fighter = payload.fighter;
   }
   if (typeof payload?.name === "string" && payload.name.trim()) {

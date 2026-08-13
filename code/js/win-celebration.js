@@ -21,9 +21,13 @@ window.CBWinCelebration = (function () {
   let usaImg = null;
   let japanImg = null;
   let russiaImg = null;
+  let franceImg = null;
+  let ukImg = null;
   let deagleImg = null;
   let katanaImg = null;
   let absolutImg = null;
+  let baguetteImg = null;
+  let umbrellaImg = null;
 
   let camZoom = 1;
   let camX = W / 2;
@@ -121,6 +125,30 @@ window.CBWinCelebration = (function () {
         (window.CBRussiaAbilities && window.CBRussiaAbilities.absolutPath) ||
         "assets/absolut.png";
     }
+    if (!franceImg) {
+      franceImg = new Image();
+      franceImg.src =
+        (window.CBFranceAbilities && window.CBFranceAbilities.spritePath) ||
+        "assets/france.png";
+    }
+    if (!baguetteImg) {
+      baguetteImg = new Image();
+      baguetteImg.src =
+        (window.CBFranceAbilities && window.CBFranceAbilities.baguettePath) ||
+        "assets/baguette.webp";
+    }
+    if (!ukImg) {
+      ukImg = new Image();
+      ukImg.src =
+        (window.CBUKAbilities && window.CBUKAbilities.spritePath) ||
+        "assets/uk.png";
+    }
+    if (!umbrellaImg) {
+      umbrellaImg = new Image();
+      umbrellaImg.src =
+        (window.CBUKAbilities && window.CBUKAbilities.umbrellaPath) ||
+        "assets/umbrella.webp";
+    }
     // Prefer equipped skin for win flourish
     if (window.CBCosmetics && CBCosmetics.getEquippedWeaponPath) {
       const usaPath = CBCosmetics.getEquippedWeaponPath("usa");
@@ -154,7 +182,8 @@ window.CBWinCelebration = (function () {
     canvas.height = H;
     onDone = opts && opts.onDone;
     const f = opts && opts.fighter;
-    fighter = f === "japan" || f === "russia" ? f : "usa";
+    fighter =
+      f === "japan" || f === "russia" || f === "france" || f === "uk" ? f : "usa";
     ballR = fighter === "russia" ? 108 : 96;
 
     t = 0;
@@ -330,17 +359,25 @@ window.CBWinCelebration = (function () {
 
   function drawGun() {
     const useBottle = fighter === "russia";
+    const useBread = fighter === "france";
+    const useBrolly = fighter === "uk";
     const handX = ballX + ballR * (useBottle ? 0.42 : 0.55);
     const handY =
       ballY +
-      ballR * (useBottle ? -0.15 : 0.08) +
+      ballR * (useBottle ? -0.15 : useBrolly ? -0.05 : 0.08) +
       gunDip +
       (useBottle ? drinkBob : 0);
-    const gw = useBottle ? 58 : 110;
-    const gh = useBottle ? 100 : 60;
-    const pivotX = useBottle ? gw * 0.5 : gw * 0.34;
-    const pivotY = useBottle ? gh * 0.82 : gh * 0.58;
-    const img = useBottle ? absolutImg : deagleImg;
+    const gw = useBottle ? 58 : useBread ? 130 : useBrolly ? 48 : 110;
+    const gh = useBottle ? 100 : useBread ? 42 : useBrolly ? 110 : 60;
+    const pivotX = useBottle ? gw * 0.5 : useBrolly ? gw * 0.5 : gw * 0.34;
+    const pivotY = useBottle ? gh * 0.82 : useBrolly ? gh * 0.88 : gh * 0.58;
+    const img = useBottle
+      ? absolutImg
+      : useBread
+        ? baguetteImg
+        : useBrolly
+          ? umbrellaImg
+          : deagleImg;
 
     ctx.save();
     ctx.translate(handX, handY);
@@ -385,7 +422,11 @@ window.CBWinCelebration = (function () {
         ? japanImg
         : fighter === "russia"
           ? russiaImg
-          : usaImg;
+          : fighter === "france"
+            ? franceImg
+            : fighter === "uk"
+              ? ukImg
+              : usaImg;
     ctx.save();
     ctx.translate(ballX, ballY);
     if (img && img.complete && img.naturalWidth) {
@@ -397,7 +438,11 @@ window.CBWinCelebration = (function () {
           ? "#bc002d"
           : fighter === "russia"
             ? "#0039a6"
-            : "#b22234";
+            : fighter === "france"
+              ? "#002395"
+              : fighter === "uk"
+                ? "#012169"
+                : "#b22234";
       ctx.beginPath();
       ctx.arc(0, 0, ballR, 0, Math.PI * 2);
       ctx.fill();

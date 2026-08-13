@@ -1,5 +1,5 @@
 /** Game release version (not roster save schema). */
 window.CBVersion = {
-  number: "1.3.2",
-  label: "Version 1.3.2",
+  number: "1.4.0",
+  label: "Version 1.4.0",
 };

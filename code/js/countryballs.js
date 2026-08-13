@@ -35,6 +35,24 @@ window.CBCountryballs = (function () {
       special: "Drink",
       ultimate: "Brotherhood",
     },
+    france: {
+      id: "france",
+      name: "France",
+      sprite: "assets/france.png",
+      baseAtk: 17,
+      blurb: "Baguette strike · throw · wine spill · guided slams",
+      special: "Wine Spill",
+      ultimate: "Guided Baguettes",
+    },
+    uk: {
+      id: "uk",
+      name: "UK",
+      sprite: "assets/uk.png",
+      baseAtk: 16,
+      blurb: "Umbrella bash · teacup toss · acid rain · warship",
+      special: "Acid Rain",
+      ultimate: "Warship",
+    },
   };
 
   const KO_XP = {
@@ -97,12 +115,16 @@ window.CBCountryballs = (function () {
         inv.effects.push("void_shroud");
         inv.effects.push("solar_aegis");
         inv.effects.push("wrath_of_the_gods");
+        inv.hats.push("beret");
+        inv.hats.push("tophat");
         return inv;
       })(),
       balls: {
         usa: makeBall("usa", { owned: true }),
         japan: makeBall("japan", { owned: false }),
         russia: makeBall("russia", { owned: false }),
+        france: makeBall("france", { owned: false }),
+        uk: makeBall("uk", { owned: false }),
       },
     };
   }
@@ -151,6 +173,8 @@ window.CBCountryballs = (function () {
     if (inv.effects.indexOf("void_shroud") < 0) inv.effects.push("void_shroud");
     if (inv.effects.indexOf("solar_aegis") < 0) inv.effects.push("solar_aegis");
     if (inv.effects.indexOf("wrath_of_the_gods") < 0) inv.effects.push("wrath_of_the_gods");
+    if (inv.hats.indexOf("beret") < 0) inv.hats.push("beret");
+    if (inv.hats.indexOf("tophat") < 0) inv.hats.push("tophat");
     return inv;
   }
 
@@ -271,6 +295,10 @@ window.CBCountryballs = (function () {
   }
 
   function isCharacterOwned(id) {
+    // Gacha parked: all roster fighters playable (cosmetics stay locked).
+    if (window.CBGacha && CBGacha.ENABLED === false) {
+      if (id === "usa" || id === "japan" || id === "russia" || id === "france" || id === "uk") return true;
+    }
     const b = getBall(id);
     return !!(b && b.owned);
   }
@@ -459,10 +487,15 @@ window.CBCountryballs = (function () {
   /** Replace in-memory + local cache from cloud JSON (no cloud re-upload loop). */
   function hydrateFromCloud(data) {
     roster = normalize(data);
+    const unlocked = grantPlayableFightersWhenGachaOff();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(roster));
     } catch (err) {
       console.warn("[CBCountryballs] hydrate local cache failed", err);
+    }
+    if (unlocked && window.CBAuth && typeof CBAuth.scheduleCloudSave === "function") {
+      CBAuth.scheduleCloudSave();
+      console.log("[CBCountryballs] gacha off — unlocked fighters after cloud hydrate");
     }
     console.log(
       "[CBCountryballs] hydrated from cloud coins=" + (roster.coins || 0)
@@ -481,8 +514,26 @@ window.CBCountryballs = (function () {
     }
   }
 
+  function grantPlayableFightersWhenGachaOff() {
+    if (!(window.CBGacha && CBGacha.ENABLED === false)) return false;
+    if (!roster || !roster.balls) return false;
+    let changed = false;
+    ["usa", "japan", "russia", "france", "uk"].forEach(function (id) {
+      const b = roster.balls[id];
+      if (b && !b.owned) {
+        b.owned = true;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
   function ensure() {
     if (!roster) load();
+    if (grantPlayableFightersWhenGachaOff()) {
+      save();
+      console.log("[CBCountryballs] gacha off — unlocked all roster fighters");
+    }
     return roster;
   }
 
@@ -638,7 +689,13 @@ window.CBCountryballs = (function () {
   /** Call when you KO the foe (stock or unlimited). */
   function awardFoeKo(config) {
     const c = config || {};
-    const fighter = c.fighter === "japan" || c.fighter === "russia" ? c.fighter : "usa";
+    const fighter =
+      c.fighter === "japan" ||
+      c.fighter === "russia" ||
+      c.fighter === "france" ||
+      c.fighter === "uk"
+        ? c.fighter
+        : "usa";
     return addXp(fighter, xpForKo(c));
   }
 

@@ -28,6 +28,22 @@ window.CBCosmetics = (function () {
       oy: -0.55,
     },
     {
+      id: "beret",
+      name: "Beret",
+      src: "assets/hats/beret.webp",
+      scale: 0.64,
+      ox: -0.08,
+      oy: -0.46,
+    },
+    {
+      id: "tophat",
+      name: "Top Hat",
+      src: "assets/hats/tophat.webp",
+      scale: 0.72,
+      ox: 0,
+      oy: -0.78,
+    },
+    {
       id: "usa_buddy",
       name: "Little USA",
       src: "assets/hats/usa_buddy.png",
@@ -85,9 +101,21 @@ window.CBCosmetics = (function () {
     russia: { ox: -0.12, oy: 0.12 },
   };
 
-  function fighterHatNudge(ballId) {
-    const n = FIGHTER_HAT_NUDGE[ballId];
-    return n ? { ox: n.ox, oy: n.oy } : { ox: 0, oy: 0 };
+  /** Extra placement for one hat on one fighter (added on top of FIGHTER_HAT_NUDGE). */
+  const HAT_FIGHTER_NUDGE = {
+    russia: {
+      beret: { ox: 0.10, oy: -0.05 },
+    },
+  };
+
+  function fighterHatNudge(ballId, hatId) {
+    const n = FIGHTER_HAT_NUDGE[ballId] || { ox: 0, oy: 0 };
+    const extra =
+      (hatId &&
+        HAT_FIGHTER_NUDGE[ballId] &&
+        HAT_FIGHTER_NUDGE[ballId][hatId]) ||
+      { ox: 0, oy: 0 };
+    return { ox: n.ox + extra.ox, oy: n.oy + extra.oy };
   }
 
   /** Fighter-locked weapon skins. null src → use fallbackSrc until art exists. */
@@ -248,7 +276,7 @@ window.CBCosmetics = (function () {
   function hatDrawBox(hat, cx, cy, radius, facing, ballId) {
     const h = getHat(hat && hat.id ? hat.id : hat);
     if (!h || !h.src || h.scale <= 0) return null;
-    const nudge = fighterHatNudge(ballId);
+    const nudge = fighterHatNudge(ballId, h.id);
     const ox = h.ox + nudge.ox;
     const oy = h.oy + nudge.oy;
     const fx = facing < 0 ? -1 : 1;
@@ -270,7 +298,7 @@ window.CBCosmetics = (function () {
       }
       if (entry.id === "wpn_katana_blue" || entry.id === "wpn_katana_rainbow") {
         // Requested transforms:
-        // - blue katana: vertical flip + 180deg
+        // - blue katana: vertical flip only (was vflip+180; +another 180 → cancel rotate)
         // - rainbow katana: 180deg
         const c = document.createElement("canvas");
         c.width = img.naturalWidth || img.width;
@@ -280,8 +308,9 @@ window.CBCosmetics = (function () {
           ctx.translate(c.width / 2, c.height / 2);
           if (entry.id === "wpn_katana_blue") {
             ctx.scale(1, -1);
+          } else {
+            ctx.rotate(Math.PI);
           }
-          ctx.rotate(Math.PI);
           ctx.drawImage(img, -c.width / 2, -c.height / 2, c.width, c.height);
           const transformed = new Image();
           transformed.onload = function () {

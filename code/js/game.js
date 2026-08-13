@@ -21,6 +21,8 @@ window.CBGame = (function () {
   let usaImg = null;
   let japanImg = null;
   let russiaImg = null;
+  let franceImg = null;
+  let ukImg = null;
   let fighterImg = null;
   let onExitToMenu = null;
   let onMatchEnd = null;
@@ -176,7 +178,11 @@ window.CBGame = (function () {
         ? "japan"
         : c.fighter === "russia"
           ? "russia"
-          : "usa";
+          : c.fighter === "france"
+            ? "france"
+            : c.fighter === "uk"
+              ? "uk"
+              : "usa";
     let lives = null;
     if (matchType === "custom" || matchType === "multiplayer") {
       lives = Math.max(1, Math.min(100, Math.floor(c.lives || 3)));
@@ -227,6 +233,12 @@ window.CBGame = (function () {
     if (matchConfig.fighter === "russia" && window.CBRussiaAbilities) {
       return window.CBRussiaAbilities;
     }
+    if (matchConfig.fighter === "france" && window.CBFranceAbilities) {
+      return window.CBFranceAbilities;
+    }
+    if (matchConfig.fighter === "uk" && window.CBUKAbilities) {
+      return window.CBUKAbilities;
+    }
     return window.CBUsaAbilities;
   }
 
@@ -237,12 +249,16 @@ window.CBGame = (function () {
   function pickFighterImg() {
     if (matchConfig.fighter === "japan") return japanImg;
     if (matchConfig.fighter === "russia") return russiaImg;
+    if (matchConfig.fighter === "france") return franceImg;
+    if (matchConfig.fighter === "uk") return ukImg;
     return usaImg;
   }
 
   function fighterImgById(id) {
     if (id === "japan") return japanImg;
     if (id === "russia") return russiaImg;
+    if (id === "france") return franceImg;
+    if (id === "uk") return ukImg;
     return usaImg;
   }
 
@@ -257,7 +273,11 @@ window.CBGame = (function () {
           ? "japan"
           : matchConfig.fighter === "russia"
             ? "russia"
-            : "usa",
+            : matchConfig.fighter === "france"
+              ? "france"
+              : matchConfig.fighter === "uk"
+                ? "uk"
+                : "usa",
       x: W * 0.22,
       y: spawnY,
       radius: matchConfig.fighter === "russia" ? 50 : 42,
@@ -269,6 +289,7 @@ window.CBGame = (function () {
       aimY: H * 0.5,
       invuln: false,
       vy: 0,
+      moveVx: 0,
       grounded: true,
       plunging: false,
     };
@@ -404,7 +425,10 @@ window.CBGame = (function () {
   }
 
   function castOpts(extra) {
-    const o = Object.assign({ foeHp: foeHp(), foe: foe() }, extra || {});
+    const o = Object.assign(
+      { foeHp: foeHp(), foe: foe(), groundY: floorY() },
+      extra || {}
+    );
     return o;
   }
 
@@ -500,6 +524,7 @@ window.CBGame = (function () {
 
     player.plunging = true;
     player.vy = PLUNGE_VY;
+    if (window.CBMotion) CBMotion.punch(player, { squash: -0.18 });
     clearPlungeFx();
     const plungeCols = playerAuraColors(["#ffffff", "#f7d354", "#b22234"]);
     plungeFx = window.CBEffects.spawnPlungeAttack({
@@ -652,7 +677,31 @@ window.CBGame = (function () {
     if (abilityLock > 0 || (cinema && cinema.lockControl)) return;
     player.vy = JUMP_VY;
     player.grounded = false;
+    if (window.CBMotion) CBMotion.punch(player, { squash: 0.18, land: 0 });
     console.log("[CBGame] jump");
+  }
+
+  function stepMove(dt, mx, moveMult) {
+    if (!player) return;
+    if (typeof player.moveVx !== "number") player.moveVx = 0;
+    const airMul = player.grounded ? 1 : 0.9;
+    const plungeMul = player.plunging ? 0.45 : 1;
+    const cap = MOVE_SPEED * moveMult * airMul * plungeMul;
+    const accel = player.grounded ? 3600 : 2200;
+    const friction = player.grounded ? 3200 : 700;
+    if (mx !== 0) {
+      player.moveVx += mx * accel * dt;
+      player.moveVx = Math.max(-cap, Math.min(cap, player.moveVx));
+      player.facing = mx > 0 ? 1 : -1;
+    } else {
+      const fr = friction * dt;
+      if (Math.abs(player.moveVx) <= fr) player.moveVx = 0;
+      else player.moveVx -= Math.sign(player.moveVx) * fr;
+      if (Math.abs(player.moveVx) > cap) {
+        player.moveVx = Math.max(-cap, Math.min(cap, player.moveVx));
+      }
+    }
+    player.x += player.moveVx * dt;
   }
 
   function applyPlayerPhysics(dt) {
@@ -910,6 +959,16 @@ window.CBGame = (function () {
     return pending;
   }
 
+  function koStyleId() {
+    const id = playerAuraId();
+    if (!id || id === "none") return "default";
+    if (id === "wrath_of_the_gods") return "wrath";
+    if (id === "uncle_sam") return "sam";
+    if (id === "void_shroud") return "void";
+    if (id === "solar_aegis") return "solar";
+    return "default";
+  }
+
   function beginFoeKo(entity, kind, opts) {
     const o = opts || {};
     if (!entity || foeKoAnim) return;
@@ -928,57 +987,174 @@ window.CBGame = (function () {
       ny /= dl;
     }
     const power = o.power || 1;
-    const duration = o.duration || 0.8;
+    const style = o.style || koStyleId();
+    let vx = nx * (260 + 140 * power);
+    let vy = o.vy != null ? o.vy : -300 - 90 * power;
+    let spin = (Math.random() > 0.5 ? 1 : -1) * (9 + 5 * power);
+    let duration = o.duration || 0.8;
+    if (style === "wrath") {
+      vx = 0;
+      vy = 0;
+      spin = 0;
+      duration = o.duration || 0.72;
+    } else if (style === "void") {
+      vx = 0;
+      vy = 0;
+      spin = 0;
+      duration = o.duration || 0.75;
+    } else if (style === "solar") {
+      vx = 0;
+      vy = o.vy != null ? o.vy : -95;
+      spin = 1.15;
+      duration = o.duration || 0.85;
+    } else if (style === "sam") {
+      vx = 0;
+      vy = 0;
+      spin = 0;
+      duration = o.duration || 0.78;
+    }
     foeKoAnim = {
       kind: kind,
+      style: style,
       x: entity.x,
       y: entity.y,
+      originX: entity.x,
+      originY: entity.y,
       radius: entity.radius || 38,
-      vx: nx * (260 + 140 * power),
-      vy: o.vy != null ? o.vy : -300 - 90 * power,
+      vx: vx,
+      vy: vy,
       rot: 0,
-      spin: (Math.random() > 0.5 ? 1 : -1) * (9 + 5 * power),
+      spin: spin,
       scale: 1,
       alpha: 1,
       timer: duration,
       maxTimer: duration,
-      flash: 0.55,
+      flash: style === "wrath" ? 0.9 : 0.55,
+      fxTimer: 0,
       isBot: kind === "enemy",
       enemySnapshot: kind === "enemy" ? Object.assign({}, entity) : null,
       pending: o.pending || buildFoeRespawn(kind),
     };
     if (window.CBCamera) {
       window.CBCamera.focusOn(entity.x, entity.y, 1.9, 1.0);
-      window.CBCamera.addShake(0.55);
+      window.CBCamera.addShake(style === "wrath" ? 0.72 : 0.55);
     }
     if (sloMo) {
       sloMo.endReal = Math.max(sloMo.endReal || 0, 1.0);
     } else {
       startFinisherSloMo("ko");
     }
-    console.log("[CBGame] foe KO launch", kind);
+    console.log("[CBGame] foe KO launch", kind, "style=" + style);
   }
 
   function completeFoeKo() {
     if (!foeKoAnim) return;
     const anim = foeKoAnim;
     foeKoAnim = null;
-    triggerKoExplosion(anim.kind, anim.x, anim.y);
+    triggerKoExplosion(anim.kind, anim.x, anim.y, anim.style);
     if (anim.pending) respawnEvent = anim.pending;
   }
 
   function updateFoeKo(dt) {
     if (!foeKoAnim) return;
     const a = foeKoAnim;
+    const style = a.style || "default";
     a.timer -= dt;
-    a.x += a.vx * dt;
-    a.y += a.vy * dt;
-    a.vy += GRAVITY * 0.48 * dt;
-    a.rot += a.spin * dt;
-    a.flash = Math.max(0, a.flash - dt * 1.5);
+    a.fxTimer = (a.fxTimer || 0) - dt;
     const prog = 1 - Math.max(0, a.timer) / (a.maxTimer || 0.8);
-    if (prog > 0.5) a.scale = Math.max(0.12, 1 - (prog - 0.5) * 1.15);
-    if (prog > 0.62) a.alpha = Math.max(0, 1 - (prog - 0.62) / 0.38);
+
+    if (style === "wrath") {
+      a.x = a.originX + Math.sin(prog * 48) * 2.4;
+      a.y = a.originY + Math.cos(prog * 36) * 1.6;
+      a.rot = 0;
+      a.spin = 0;
+      a.scale = prog > 0.78 ? Math.max(0.2, 1 - (prog - 0.78) * 4) : 1;
+      a.alpha = prog > 0.82 ? Math.max(0, 1 - (prog - 0.82) / 0.18) : 1;
+      a.flash = 0.45 + Math.sin(prog * 22) * 0.25;
+      if (a.fxTimer <= 0 && window.CBEffects && CBEffects.spawnWrathLightning) {
+        a.fxTimer = 0.11;
+        CBEffects.spawnWrathLightning(a.x, a.y, { count: 2 });
+      }
+    } else if (style === "void") {
+      a.x = a.originX;
+      a.y = a.originY;
+      a.rot = 0;
+      a.scale = Math.max(0.06, 1 - prog * 0.94);
+      a.alpha = Math.max(0.15, 1 - prog * 0.55);
+      a.flash = 0.2;
+      if (window.CBEffects && Math.random() > 0.35) {
+        const ang = Math.random() * Math.PI * 2;
+        const dist = 28 + Math.random() * 50;
+        CBEffects.spawnParticle(
+          a.x + Math.cos(ang) * dist,
+          a.y + Math.sin(ang) * dist,
+          {
+            vx: Math.cos(ang) * -90,
+            vy: Math.sin(ang) * -90,
+            life: 0.22,
+            size: 2 + Math.random() * 3,
+            color: ["#a66bff", "#5f2a8a", "#e2ccff"][Math.floor(Math.random() * 3)],
+            gravity: 0,
+          }
+        );
+      }
+    } else if (style === "sam") {
+      a.x = a.originX;
+      a.y = a.originY;
+      a.rot = 0;
+      a.spin = 0;
+      a.scale = 1 + Math.sin(prog * Math.PI) * 0.18;
+      a.alpha = prog > 0.72 ? Math.max(0, 1 - (prog - 0.72) / 0.28) : 1;
+      a.flash = 0.35 + Math.sin(prog * 18) * 0.3;
+      if (a.fxTimer <= 0 && window.CBEffects) {
+        a.fxTimer = 0.07;
+        const cols = ["#d7263d", "#ffffff", "#1f4ba5", "#f5f7ff"];
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 70 + Math.random() * 90;
+        CBEffects.spawnParticle(a.x, a.y, {
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd - 20,
+          life: 0.32,
+          size: 3 + Math.random() * 3,
+          color: cols[Math.floor(Math.random() * cols.length)],
+          gravity: 20,
+        });
+      }
+    } else if (style === "solar") {
+      a.x += a.vx * dt;
+      a.y += a.vy * dt;
+      a.rot += a.spin * dt;
+      a.scale = 1 + prog * 0.22;
+      a.alpha = prog > 0.7 ? Math.max(0, 1 - (prog - 0.7) / 0.3) : 1;
+      a.flash = 0.25 + prog * 0.45;
+      if (window.CBEffects && Math.random() > 0.4) {
+        CBEffects.spawnParticle(a.x, a.y + 8, {
+          vx: (Math.random() - 0.5) * 40,
+          vy: 40 + Math.random() * 50,
+          life: 0.28,
+          size: 2 + Math.random() * 3,
+          color: ["#ffd76a", "#fff4c2", "#f6b73c"][Math.floor(Math.random() * 3)],
+          gravity: -20,
+        });
+      }
+    } else {
+      a.x += a.vx * dt;
+      a.y += a.vy * dt;
+      a.vy += GRAVITY * 0.48 * dt;
+      a.rot += a.spin * dt;
+      a.flash = Math.max(0, a.flash - dt * 1.5);
+      if (prog > 0.5) a.scale = Math.max(0.12, 1 - (prog - 0.5) * 1.15);
+      if (prog > 0.62) a.alpha = Math.max(0, 1 - (prog - 0.62) / 0.38);
+      if (window.CBEffects && Math.random() > 0.45) {
+        CBEffects.spawnParticle(a.x, a.y, {
+          vx: (Math.random() - 0.5) * 110,
+          vy: (Math.random() - 0.5) * 110,
+          life: 0.24,
+          size: 2 + Math.random() * 3,
+          color: a.kind === "enemy" ? "#ffca28" : "#dddddd",
+        });
+      }
+    }
 
     a.x = Math.max(a.radius * a.scale, Math.min(W - a.radius * a.scale, a.x));
     const minY = a.radius * a.scale + 16;
@@ -994,16 +1170,6 @@ window.CBGame = (function () {
 
     if (window.CBCamera) {
       window.CBCamera.focusOn(a.x, a.y - 10, 1.85 + prog * 0.15, 0.2);
-    }
-
-    if (window.CBEffects && Math.random() > 0.45) {
-      window.CBEffects.spawnParticle(a.x, a.y, {
-        vx: (Math.random() - 0.5) * 110,
-        vy: (Math.random() - 0.5) * 110,
-        life: 0.24,
-        size: 2 + Math.random() * 3,
-        color: a.kind === "enemy" ? "#ffca28" : "#dddddd",
-      });
     }
 
     if (a.timer <= 0) completeFoeKo();
@@ -1041,7 +1207,18 @@ window.CBGame = (function () {
       ctx.globalAlpha = Math.max(0, a.alpha);
     }
     if (a.flash > 0) {
-      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.9, a.flash * 2.2)})`;
+      const tint =
+        a.style === "wrath"
+          ? "255,40,40"
+          : a.style === "void"
+            ? "140,80,255"
+            : a.style === "solar"
+              ? "255,220,100"
+              : a.style === "sam"
+                ? "255,255,255"
+                : "255,255,255";
+      ctx.fillStyle =
+        "rgba(" + tint + "," + Math.min(0.9, a.flash * 2.2) + ")";
       ctx.beginPath();
       ctx.arc(a.x, a.y, a.radius * a.scale * 1.08, 0, Math.PI * 2);
       ctx.fill();
@@ -1065,49 +1242,93 @@ window.CBGame = (function () {
     else if (kind === "enemy") enemy = null;
   }
 
-  function triggerKoExplosion(kind, x, y) {
-    const wrathFinisher =
-      playerHasWrath() && sloMo && kind !== "player";
+  function triggerKoExplosion(kind, x, y, style) {
+    const FX = window.CBEffects;
+    if (!FX) return;
+    const st = style || (kind === "player" ? "default" : koStyleId());
+    const power = kind === "enemy" ? 1.85 : kind === "dummy" ? 1.45 : 1.2;
     const red = ["#ff1a1a", "#ff4d4d", "#8b0000", "#ffffff", "#bf360c"];
-    const colors = wrathFinisher
-      ? red
-      : kind === "enemy"
+    const defaultCols =
+      kind === "enemy"
         ? ["#c62828", "#ffca28", "#ffffff", "#bf360c", "#f7d354"]
         : kind === "player"
           ? ["#b22234", "#3c3b6e", "#ffffff", "#f7d354"]
           : ["#888", "#ccc", "#444", "#fff"];
 
-    function boom() {
-      if (window.CBEffects.spawnExplosion) {
-        window.CBEffects.spawnExplosion(x, y, {
-          power: kind === "enemy" ? 1.85 : kind === "dummy" ? 1.45 : 1.2,
-          colors: colors,
-        });
-      } else {
-        window.CBEffects.spawnBurst(x, y, 24, colors);
-      }
+    function shake() {
       if (window.CBCamera) {
         window.CBCamera.focusOn(x, y, 1.6, 1.15);
-        window.CBCamera.addShake(0.55);
+        window.CBCamera.addShake(st === "wrath" ? 0.72 : 0.55);
       }
-      console.log("[CBGame] KO explosion", kind, Math.round(x), Math.round(y));
     }
 
-    if (
-      wrathFinisher &&
-      window.CBEffects.spawnFinisherCross
-    ) {
-      window.CBEffects.spawnFinisherCross({
+    function boom(colors, pwr) {
+      if (FX.spawnExplosion) {
+        FX.spawnExplosion(x, y, { power: pwr || power, colors: colors });
+      } else {
+        FX.spawnBurst(x, y, 24, colors);
+      }
+      shake();
+      console.log("[CBGame] KO explosion", kind, "style=" + st, Math.round(x), Math.round(y));
+    }
+
+    if (st === "wrath" && kind !== "player" && FX.spawnFinisherCross) {
+      FX.spawnFinisherCross({
         x: x,
         y: y,
         radius: 52,
         colors: red,
-        onDone: boom,
+        onDone: function () {
+          boom(red, power);
+        },
       });
       console.log("[CBGame] Wrath finisher cross");
-    } else {
-      boom();
+      return;
     }
+    if (st === "void" && kind !== "player") {
+      if (FX.spawnImplosion) FX.spawnImplosion(x, y, { power: power });
+      else boom(["#2a0a42", "#5f2a8a", "#a66bff", "#e2ccff"], 0.7);
+      shake();
+      console.log("[CBGame] KO void", kind, Math.round(x), Math.round(y));
+      return;
+    }
+    if (st === "sam" && kind !== "player") {
+      const rwb = ["#d7263d", "#ffffff", "#1f4ba5", "#f5f7ff", "#7a0014"];
+      if (FX.spawnStarBurst) {
+        FX.spawnStarBurst(x, y, { colors: rwb, count: 28 });
+        FX.spawnStarBurst(x, y, { colors: rwb, count: 16 });
+      } else {
+        FX.spawnBurst(x, y, 28, rwb);
+      }
+      if (FX.spawnShockwave) {
+        FX.spawnShockwave(x, y, {
+          color: "rgba(215,38,61,0.75)",
+          maxRadius: 150,
+          life: 0.42,
+        });
+        FX.spawnShockwave(x, y, {
+          color: "rgba(31,75,165,0.55)",
+          maxRadius: 110,
+          life: 0.36,
+        });
+      }
+      shake();
+      console.log("[CBGame] KO uncle sam stars", kind, Math.round(x), Math.round(y));
+      return;
+    }
+    if (st === "solar" && kind !== "player") {
+      const gold = ["#f6b73c", "#ffd76a", "#fff4c2", "#c9861a", "#ffffff"];
+      boom(gold, power * 1.05);
+      if (FX.spawnShockwave) {
+        FX.spawnShockwave(x, y, {
+          color: "rgba(255,215,106,0.8)",
+          maxRadius: 160,
+          life: 0.45,
+        });
+      }
+      return;
+    }
+    boom(defaultCols, power);
   }
 
   function onKeyDown(e) {
@@ -1214,12 +1435,20 @@ window.CBGame = (function () {
       }
     }
 
-    const moveMult = speedBuff ? speedBuff.mult : 1;
+    const moveMult =
+      (speedBuff ? speedBuff.mult : 1) *
+      (player.id !== "france" &&
+      window.CBEffects &&
+      CBEffects.wineSlowAt &&
+      CBEffects.wineSlowAt(player.x, player.y)
+        ? 0.5
+        : 1);
 
     if (dashTimer > 0) {
       dashTimer -= dt;
       player.x += dashVx * dt;
       player.y += dashVy * dt;
+      player.moveVx = dashVx;
       if (Math.abs(dashVx) > 10) player.facing = dashVx >= 0 ? 1 : -1;
       abilities().tickEagleTrail(player);
       // Dashing overrides gravity briefly — still clamp to arena
@@ -1230,14 +1459,10 @@ window.CBGame = (function () {
       let mx = 0;
       if (keys.KeyA || keys.ArrowLeft) mx -= 1;
       if (keys.KeyD || keys.ArrowRight) mx += 1;
-      if (mx !== 0) {
-        const airMul = player.grounded ? 1 : 0.9;
-        const plungeMul = player.plunging ? 0.45 : 1;
-        player.x += mx * MOVE_SPEED * moveMult * airMul * plungeMul * dt;
-        player.facing = mx > 0 ? 1 : -1;
-      }
+      stepMove(dt, mx, moveMult);
       applyPlayerPhysics(dt);
     } else {
+      stepMove(dt, 0, moveMult);
       applyPlayerPhysics(dt);
     }
     tickPlungeFx(dt);
@@ -1277,6 +1502,13 @@ window.CBGame = (function () {
       } else {
         clampEntity(dummy);
       }
+    }
+
+    if (window.CBMotion) {
+      CBMotion.tick(player, dt);
+      if (dummy) CBMotion.tick(dummy, dt);
+      if (enemy) CBMotion.tick(enemy, dt);
+      if (mpFoe) CBMotion.tick(mpFoe, dt);
     }
 
     const hitList = [];
@@ -1578,6 +1810,14 @@ window.CBGame = (function () {
       const wpn = CBRussiaAbilities.getMeleeWeapon({ id: "russia" });
       return (wpn && wpn.img) || null;
     }
+    if (fighterId === "france" && window.CBFranceAbilities && CBFranceAbilities.getMeleeWeapon) {
+      const wpn = CBFranceAbilities.getMeleeWeapon({ id: "france" });
+      return (wpn && wpn.img) || null;
+    }
+    if (fighterId === "uk" && window.CBUKAbilities && CBUKAbilities.getMeleeWeapon) {
+      const wpn = CBUKAbilities.getMeleeWeapon({ id: "uk" });
+      return (wpn && wpn.img) || null;
+    }
     if (window.CBUsaAbilities && CBUsaAbilities.getMeleeWeapon) {
       const wpn = CBUsaAbilities.getMeleeWeapon({ id: fighterId || "usa" });
       return (wpn && wpn.img) || null;
@@ -1735,6 +1975,32 @@ window.CBGame = (function () {
           ownerId: "remote-fx",
         });
         mpFxHideWeaponUntil = Math.max(mpFxHideWeaponUntil, 0.85);
+      } else if (
+        (fighter === "france" || fighter === "uk") &&
+        CBEffects.spawnSpriteProjectile
+      ) {
+        const dx = (aimX || mpFoe.x + 80) - mpFoe.x;
+        const dy = (aimY || mpFoe.y) - mpFoe.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const throwImg =
+          fighter === "uk" && window.CBUKAbilities && CBUKAbilities.getTeaImage
+            ? CBUKAbilities.getTeaImage()
+            : img;
+        CBEffects.spawnSpriteProjectile(mpFoe.x, mpFoe.y, {
+          vx: (dx / len) * 480,
+          vy: (dy / len) * 480 - 40,
+          life: 1.2,
+          radius: 20,
+          damage: 0,
+          ownerId: "remote-fx",
+          img: throwImg,
+          w: fighter === "uk" ? 44 : 88,
+          h: fighter === "uk" ? 40 : 28,
+          rot: Math.atan2(dy, dx),
+          spin: 8,
+          gravity: 380,
+        });
+        mpFxHideWeaponUntil = Math.max(mpFxHideWeaponUntil, 0.55);
       } else if (CBEffects.spawnDeagleSpin) {
         CBEffects.spawnDeagleSpin({
           follow: follow,
@@ -1749,13 +2015,71 @@ window.CBGame = (function () {
       return;
     }
     if (kind === "special") {
-      if (CBEffects.spawnBurst) {
+      if (fighter === "france" && CBEffects.spawnWineSpill) {
+        const fx = (mpFoe.facing || 1) >= 0 ? 1 : -1;
+        CBEffects.spawnWineSpill({
+          x: mpFoe.x + fx * 78,
+          y: mpFoe.y + (mpFoe.radius || 42) * 0.55,
+          rx: 130,
+          ry: 38,
+          life: 5,
+          ownerId: "remote-fx",
+        });
+      } else if (fighter === "uk" && CBEffects.spawnAcidRain) {
+        const fx = (mpFoe.facing || 1) >= 0 ? 1 : -1;
+        CBEffects.spawnAcidRain({
+          x: mpFoe.x + fx * 70,
+          y: mpFoe.y - 20,
+          rx: 155,
+          ry: 110,
+          life: 5,
+          damage: 0,
+          ownerId: "remote-fx",
+        });
+      } else if (CBEffects.spawnBurst) {
         CBEffects.spawnBurst(aimX, aimY, 10, ["#ffffff", "#f0c43a", "#b22234"]);
       }
       return;
     }
     if (kind === "ult") {
-      if (CBEffects.spawnBurst) {
+      if (fighter === "france" && CBEffects.spawnBaguetteMissile) {
+        const gy = typeof mpFoe.y === "number" ? mpFoe.y + 8 : 360;
+        for (let i = 0; i < 3; i++) {
+          CBEffects.spawnBaguetteMissile({
+            x: mpFoe.x + (i - 1) * 22,
+            y: -30 - i * 50,
+            vx: (Math.random() - 0.5) * 40,
+            vy: 260,
+            impactX: mpFoe.x + (i - 1) * 22,
+            groundY: gy,
+            delay: i * 0.14,
+            img: img,
+            w: 150,
+            h: 50,
+            damage: 0,
+            ownerId: "remote-fx",
+          });
+        }
+      } else if (fighter === "uk" && CBEffects.spawnWarship) {
+        const dir = (mpFoe.facing || 1) >= 0 ? 1 : -1;
+        const gy = typeof mpFoe.y === "number" ? mpFoe.y + 8 : 360;
+        const shipImg =
+          window.CBUKAbilities && CBUKAbilities.getShipImage
+            ? CBUKAbilities.getShipImage()
+            : img;
+        CBEffects.spawnWarship({
+          x: dir > 0 ? -1000 : 1960,
+          groundY: gy,
+          vx: dir * 430,
+          w: 2240,
+          h: 840,
+          img: shipImg,
+          facing: dir,
+          damage: 0,
+          ownerId: "remote-fx",
+          hitH: 92,
+        });
+      } else if (CBEffects.spawnBurst) {
         CBEffects.spawnBurst(mpFoe.x, mpFoe.y, 16, ["#f0c43a", "#ffffff", "#ff4d4d"]);
       }
       return;
@@ -1876,6 +2200,7 @@ window.CBGame = (function () {
       const sz = gr * 2;
       ctx.save();
       ctx.translate(gx, cy);
+      if (window.CBMotion) CBMotion.apply(ctx, mpFoe);
       if (facing < 0) ctx.scale(-1, 1);
       if (sil) ctx.filter = "brightness(0)";
       ctx.drawImage(gImg, -sz / 2, -sz / 2, sz, sz);
@@ -1888,7 +2213,7 @@ window.CBGame = (function () {
           const hh = w / aspect;
           const nudge =
             CBCosmetics.fighterHatNudge
-              ? CBCosmetics.fighterHatNudge(mpFoe.fighter)
+              ? CBCosmetics.fighterHatNudge(mpFoe.fighter, mpFoe.hatId)
               : { ox: 0, oy: 0 };
           const hx = (hat.ox + nudge.ox) * gr - w / 2;
           const hy = (hat.oy + nudge.oy) * gr - hh / 2;
@@ -1923,8 +2248,24 @@ window.CBGame = (function () {
         const handDist = gr * 0.5;
         const hx = gx + Math.cos(ang) * handDist;
         const hy = cy + Math.sin(ang) * handDist;
-        const ww = mpFoe.fighter === "japan" ? 78 : 68;
-        const wh = mpFoe.fighter === "japan" ? 22 : mpFoe.fighter === "russia" ? 52 : 37;
+        const ww =
+          mpFoe.fighter === "japan"
+            ? 78
+            : mpFoe.fighter === "france"
+              ? 90
+              : mpFoe.fighter === "uk"
+                ? 36
+                : 68;
+        const wh =
+          mpFoe.fighter === "japan"
+            ? 22
+            : mpFoe.fighter === "russia"
+              ? 52
+              : mpFoe.fighter === "france"
+                ? 30
+                : mpFoe.fighter === "uk"
+                  ? 78
+                  : 37;
         ctx.save();
         ctx.translate(hx, hy);
         ctx.rotate(ang);
@@ -1945,9 +2286,13 @@ window.CBGame = (function () {
           ? "Japan"
           : mpFoe.fighter === "russia"
             ? "Russia"
-            : mpFoe.fighter === "usa"
-              ? "USA"
-              : "Rival";
+            : mpFoe.fighter === "france"
+              ? "France"
+              : mpFoe.fighter === "uk"
+                ? "UK"
+                : mpFoe.fighter === "usa"
+                ? "USA"
+                : "Rival";
       drawHpBar({ x: gx, y: cy, radius: gr, hp: mpFoe.hp, maxHp: mpFoe.maxHp }, label);
     }
   }
@@ -2041,6 +2386,15 @@ window.CBGame = (function () {
         ctx.beginPath();
         ctx.arc(dummy.x, dummy.y, dummy.radius, 0, Math.PI * 2);
         ctx.fill();
+      } else if (window.CBMotion) {
+        CBMotion.wrap(ctx, dummy, function () {
+          drawEntityCircle(dummy, "#6b6b6b");
+          ctx.fillStyle = "#222";
+          ctx.beginPath();
+          ctx.arc(dummy.x - 12, dummy.y - 8, 5, 0, Math.PI * 2);
+          ctx.arc(dummy.x + 12, dummy.y - 8, 5, 0, Math.PI * 2);
+          ctx.fill();
+        });
       } else {
         drawEntityCircle(dummy, "#6b6b6b");
         ctx.fillStyle = "#222";
@@ -2059,7 +2413,13 @@ window.CBGame = (function () {
         ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        enemyApi().draw(ctx, enemy);
+        if (window.CBMotion) {
+          CBMotion.wrap(ctx, enemy, function () {
+            enemyApi().draw(ctx, enemy);
+          });
+        } else {
+          enemyApi().draw(ctx, enemy);
+        }
         drawHpBar(enemy, enemyHudLabel());
       }
     }
@@ -2256,6 +2616,7 @@ window.CBGame = (function () {
         const size = player.radius * 2;
         ctx.save();
         ctx.translate(player.x, player.y + floatY);
+        if (window.CBMotion) CBMotion.apply(ctx, player);
         if (player.facing < 0) ctx.scale(-1, 1);
         if (invulnTimer > 0 && !sil) {
           ctx.globalAlpha = 0.55 + Math.sin(timeSec * 30) * 0.25;
@@ -2279,7 +2640,7 @@ window.CBGame = (function () {
             const hh = w / aspect;
             const nudge =
               CBCosmetics.fighterHatNudge
-                ? CBCosmetics.fighterHatNudge(player.id)
+                ? CBCosmetics.fighterHatNudge(player.id, hatId)
                 : { ox: 0, oy: 0 };
             const hx = (hat.ox + nudge.ox) * player.radius - w / 2;
             const hy = (hat.oy + nudge.oy) * player.radius - hh / 2;
@@ -2417,6 +2778,24 @@ window.CBGame = (function () {
       console.error("[CBGame] failed to load assets/russia.png");
     };
     russiaImg.src = "assets/russia.png";
+
+    franceImg = new Image();
+    franceImg.onload = function () {
+      console.log("[CBGame] France sprite loaded");
+    };
+    franceImg.onerror = function () {
+      console.error("[CBGame] failed to load assets/france.png");
+    };
+    franceImg.src = "assets/france.png";
+
+    ukImg = new Image();
+    ukImg.onload = function () {
+      console.log("[CBGame] UK sprite loaded");
+    };
+    ukImg.onerror = function () {
+      console.error("[CBGame] failed to load assets/uk.png");
+    };
+    ukImg.src = "assets/uk.png";
     fighterImg = usaImg;
 
     window.addEventListener("keydown", onKeyDown);

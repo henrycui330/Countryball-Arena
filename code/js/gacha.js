@@ -1,8 +1,9 @@
 /**
  * Gacha — spend coins to unlock cosmetics, characters, weapons.
- * 1 pull = 100 · 10 pulls = 1000
+ * Parked: ENABLED = false removes pulls from the live game (code kept for later).
  */
 window.CBGacha = (function () {
+  const ENABLED = false;
   const COST_ONE = 100;
   const COST_TEN = 1000;
   const DUP_REFUND = 20;
@@ -10,6 +11,8 @@ window.CBGacha = (function () {
   const POOL = [
     { id: "officer_cap", type: "cosmetic", name: "Officer Cap", weight: 18 },
     { id: "straw", type: "cosmetic", name: "Straw Hat", weight: 18 },
+    { id: "beret", type: "cosmetic", name: "Beret", weight: 18 },
+    { id: "tophat", type: "cosmetic", name: "Top Hat", weight: 18 },
     { id: "usa_buddy", type: "cosmetic", name: "Little USA", weight: 12 },
     { id: "japan_buddy", type: "cosmetic", name: "Little Japan", weight: 12 },
     { id: "russia_buddy", type: "cosmetic", name: "Little Russia", weight: 12 },
@@ -68,6 +71,9 @@ window.CBGacha = (function () {
   }
 
   function pull(count) {
+    if (!ENABLED) {
+      return { ok: false, error: "Gacha is temporarily disabled." };
+    }
     const CB = window.CBCountryballs;
     if (!CB) return { ok: false, error: "Roster not ready" };
 
@@ -104,6 +110,7 @@ window.CBGacha = (function () {
   }
 
   return {
+    ENABLED,
     COST_ONE,
     COST_TEN,
     DUP_REFUND,

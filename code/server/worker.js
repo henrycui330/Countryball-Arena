@@ -298,7 +298,7 @@ export class RoomServer {
       return;
     }
     if (type === "set_loadout") {
-      if (payload.fighter === "usa" || payload.fighter === "japan" || payload.fighter === "russia") {
+      if (payload.fighter === "usa" || payload.fighter === "japan" || payload.fighter === "russia" || payload.fighter === "france" || payload.fighter === "uk") {
         peer.fighter = payload.fighter;
       }
       if (typeof payload.name === "string" && payload.name.trim()) {
@@ -359,7 +359,7 @@ export class RoomServer {
     peer.roomCode = code;
     peer.ready = false;
     peer.mapId = mapId;
-    if (payload.fighter === "usa" || payload.fighter === "japan" || payload.fighter === "russia") {
+    if (payload.fighter === "usa" || payload.fighter === "japan" || payload.fighter === "russia" || payload.fighter === "france" || payload.fighter === "uk") {
       peer.fighter = payload.fighter;
     }
     if (typeof payload.name === "string" && payload.name.trim()) {
@@ -405,7 +405,7 @@ export class RoomServer {
     peer.roomCode = code;
     peer.ready = false;
     peer.mapId = room.mapId;
-    if (payload.fighter === "usa" || payload.fighter === "japan" || payload.fighter === "russia") {
+    if (payload.fighter === "usa" || payload.fighter === "japan" || payload.fighter === "russia" || payload.fighter === "france" || payload.fighter === "uk") {
       peer.fighter = payload.fighter;
     }
     if (typeof payload.name === "string" && payload.name.trim()) {

@@ -54,16 +54,6 @@ window.CBTutorial = (function () {
       },
     },
     {
-      id: "gacha",
-      title: "Gacha",
-      body: "Spend coins to unlock more fighters, hats, and weapons.",
-      target: "#screen-gacha .gacha-title",
-      place: "bottom",
-      enter: function () {
-        if (window.CBMenu && CBMenu.showGacha) CBMenu.showGacha();
-      },
-    },
-    {
       id: "multi",
       title: "Multiplayer",
       body: "Host a room, share a 5-digit code, friends join. No server links needed.",

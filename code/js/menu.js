@@ -24,12 +24,16 @@ window.CBMenu = (function () {
     usa: "USA",
     japan: "Japan",
     russia: "Russia",
+    france: "France",
+    uk: "UK",
   };
 
   const FIGHTER_SPRITE = {
     usa: "assets/usa.png",
     japan: "assets/japan.png",
     russia: "assets/russia.png",
+    france: "assets/france.png",
+    uk: "assets/uk.png",
   };
 
   const LIVES_MIN = 1;
@@ -142,6 +146,11 @@ window.CBMenu = (function () {
   }
 
   function showGacha() {
+    if (window.CBGacha && CBGacha.ENABLED === false) {
+      console.log("[CBMenu] gacha disabled — staying on title");
+      showTitle();
+      return;
+    }
     state.view = "gacha";
     hideCountryballsScreen();
     hideMultiplayerScreen();
@@ -220,7 +229,7 @@ window.CBMenu = (function () {
       btn.disabled = !owned;
       btn.title = owned
         ? FIGHTER_LABEL[id] || id
-        : "Unlock in Gacha";
+        : "Coming soon";
     });
     const name = document.getElementById("setup-fighter-name");
     if (name) name.textContent = FIGHTER_LABEL[state.fighter] || "USA";
@@ -257,7 +266,7 @@ window.CBMenu = (function () {
   }
 
   function setFighter(id) {
-    if (id !== "usa" && id !== "japan" && id !== "russia") return;
+    if (id !== "usa" && id !== "japan" && id !== "russia" && id !== "france" && id !== "uk") return;
     if (!fighterOwned(id)) {
       console.warn("[CBMenu] fighter locked:", id);
       return;
@@ -318,9 +327,14 @@ window.CBMenu = (function () {
 
     const navGacha = document.getElementById("nav-gacha");
     if (navGacha) {
-      navGacha.addEventListener("click", function () {
-        showGacha();
-      });
+      if (window.CBGacha && CBGacha.ENABLED === false) {
+        navGacha.classList.add("screen-hidden");
+        navGacha.setAttribute("hidden", "");
+      } else {
+        navGacha.addEventListener("click", function () {
+          showGacha();
+        });
+      }
     }
 
     const backGacha = document.getElementById("btn-gacha-back");
@@ -368,7 +382,9 @@ window.CBMenu = (function () {
     }
 
     if (window.CBCountryballsUI) CBCountryballsUI.init();
-    if (window.CBGachaUI) CBGachaUI.init();
+    if (window.CBGachaUI && !(window.CBGacha && CBGacha.ENABLED === false)) {
+      CBGachaUI.init();
+    }
 
     document.querySelectorAll("[data-opponent]").forEach(function (btn) {
       btn.addEventListener("click", function () {

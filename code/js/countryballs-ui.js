@@ -74,7 +74,7 @@ window.CBCountryballsUI = (function () {
       const wPx = r * 2 * hat.scale;
       const nudge =
         CBCosmetics.fighterHatNudge
-          ? CBCosmetics.fighterHatNudge(selectedId)
+          ? CBCosmetics.fighterHatNudge(selectedId, hat.id)
           : { ox: 0, oy: 0 };
       hatImg.style.width = wPx + "px";
       hatImg.style.height = "auto";
@@ -117,7 +117,7 @@ window.CBCountryballsUI = (function () {
         (owned ? "" : " is-locked");
       btn.setAttribute("data-hat-id", hat.id);
       btn.disabled = !owned;
-      btn.title = owned ? hat.name : hat.name + " — Unlock in Gacha";
+      btn.title = owned ? hat.name : hat.name + " — Coming soon";
       if (hat.src) {
         btn.innerHTML =
           '<img src="' +
@@ -171,7 +171,7 @@ window.CBCountryballsUI = (function () {
         (owned ? "" : " is-locked");
       btn.setAttribute("data-weapon-id", wpn.id);
       btn.disabled = !owned;
-      btn.title = owned ? wpn.name : wpn.name + " — Unlock in Gacha";
+      btn.title = owned ? wpn.name : wpn.name + " — Coming soon";
       if (preview) {
         btn.innerHTML =
           '<img src="' +
