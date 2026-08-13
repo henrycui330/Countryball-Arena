@@ -1,5 +1,5 @@
 /**
- * Shared ball motion juice — countryball hop, wobble, squash.
+ * Shared ball motion juice — jump/land squash only (no walk hop).
  * Gameplay x/y stay authoritative; this is draw-only.
  */
 window.CBMotion = (function () {
@@ -42,28 +42,17 @@ window.CBMotion = (function () {
     }
     const vx = (ent.x - m.px) / Math.max(0.0008, dt);
     m.visVx += (vx - m.visVx) * Math.min(1, 14 * dt);
-    const speed = Math.abs(m.visVx);
-    const run = !!(ent.grounded && speed > 50);
     const dir = m.visVx >= 0 ? 1 : -1;
-    m.bob += dt * (run ? 10.6 : 2.35);
-
-    const hop = Math.abs(Math.sin(m.bob));
-    // Rock like a sticker, not a runner lean
-    let wantTilt =
-      Math.sin(m.bob) * (run ? 0.18 : 0.07) * dir +
-      Math.sin(m.bob * 0.5) * 0.04;
-    if (!ent.grounded) {
-      wantTilt = dir * 0.08 + Math.sin(m.bob) * 0.05;
-    }
-    if (ent.plunging) wantTilt *= 0.2;
-    m.tilt += (wantTilt - m.tilt) * Math.min(1, 10 * dt);
+    m.bob += dt * 2.35;
 
     if (ent.grounded && !m.wasGrounded) {
       m.land = Math.min(1, 0.55 + Math.max(0, ent.y - m.py) * 0.02);
     }
     m.land = Math.max(0, m.land - dt * 5.4);
 
+    let wantTilt = 0;
     let wantSq = 0;
+    let bounce = 0;
     if (ent.plunging) {
       wantSq = -0.18;
     } else if (!ent.grounded) {
@@ -72,16 +61,13 @@ window.CBMotion = (function () {
           ? ent.vy
           : (ent.y - m.py) / Math.max(0.0008, dt);
       wantSq = vy < -70 ? 0.16 : vy > 100 ? -0.13 : 0.07;
-    } else if (run) {
-      wantSq = (hop - 0.5) * 0.28;
-    } else {
-      wantSq = Math.sin(m.bob) * 0.045;
+      wantTilt = dir * 0.08;
     }
     wantSq -= m.land * 0.28;
-    m.squash += (wantSq - m.squash) * Math.min(1, 15 * dt);
-
-    let bounce = run ? hop * 7.8 : Math.sin(m.bob) * 2.2;
     bounce -= m.land * 8.5;
+
+    m.tilt += (wantTilt - m.tilt) * Math.min(1, 10 * dt);
+    m.squash += (wantSq - m.squash) * Math.min(1, 15 * dt);
     m.bounce += (bounce - m.bounce) * Math.min(1, 16 * dt);
 
     m.px = ent.x;
