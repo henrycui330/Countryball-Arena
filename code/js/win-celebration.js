@@ -594,20 +594,7 @@ window.CBWinCelebration = (function () {
   }
 
   function drawHint() {
-    const oneAt =
-      fighter === "japan"
-        ? JP_PHASE.ONE_SLAM
-        : fighter === "russia"
-          ? RU_PHASE.ONE_SLAM
-          : USA_PHASE.ONE_SLAM;
-    if (t < oneAt + 0.4) return;
-    ctx.save();
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = "#fff";
-    ctx.font = "16px Trebuchet MS, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("Click Main Menu when ready", W / 2, H - 28);
-    ctx.restore();
+    /* Exit buttons live in the sky HUD — no bottom canvas prompt */
   }
 
   function draw() {

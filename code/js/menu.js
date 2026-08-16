@@ -431,13 +431,6 @@ window.CBMenu = (function () {
       if (typeof onPlay === "function") onPlay(cfg);
     });
 
-    const resultBtn = document.getElementById("btn-result-menu");
-    if (resultBtn) {
-      resultBtn.addEventListener("click", function () {
-        show();
-      });
-    }
-
     syncAll();
     showTitle();
     console.log("[CBMenu] init OK — title screen");

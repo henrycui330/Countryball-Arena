@@ -1,8 +1,17 @@
-# Countryball Arena — Version 1.5.1
+# Countryball Arena — Version 1.5.2
 
-Current release label: **Version 1.5.1**
+Current release label: **Version 1.5.2**
 
 Defined in `code/js/version.js` (`CBVersion`) and shown on the title screen.
+
+## 1.5.2 highlights — multiplayer improvements
+
+- No finishing-blow slow-mo in multiplayer (keeps clocks in sync)
+- Round-based lives: KO banner → both players reset → next round
+- Safer lobby: ignore surprise `start_match`; Main Menu leaves room + disconnects
+- Lighter net traffic (quantized state ~16 Hz, slimmer FX, skip tiny pose deltas)
+- Win screen: fullscreen plains + Main Menu button in the sky
+- Dev Easy Bot server for local MP testing (`npm run dev:bot`, room `12346`)
 
 ## 1.5.1 highlights
 

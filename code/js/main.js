@@ -41,9 +41,16 @@
     if (window.CBAuthUI) CBAuthUI.show();
   }
 
-  function showMenu() {
+  function leaveMpSession(reason, opts) {
+    if (window.CBMultiplayerUI && CBMultiplayerUI.leaveSession) {
+      CBMultiplayerUI.leaveSession(reason || "menu", opts || {});
+    }
+  }
+
+  function goTitleDisconnect() {
     window.CBGame.stop();
     if (window.CBWinCelebration) window.CBWinCelebration.stop();
+    leaveMpSession("main_menu_disconnect", { disconnect: true });
     hideAllOverlayScreens();
     if (window.CBAuth && !CBAuth.isLoggedIn()) {
       showAuth();
@@ -51,6 +58,12 @@
     }
     syncTitleUser();
     window.CBMenu.show();
+    if (window.CBMenu.showTitle) window.CBMenu.showTitle();
+    console.log("[CBMain] Main Menu (disconnect)");
+  }
+
+  function showMenu() {
+    goTitleDisconnect();
   }
 
   function startGame(cfg) {
@@ -74,8 +87,11 @@
     const game = document.getElementById("screen-game");
     if (game) game.classList.add("screen-hidden");
     if (screen) screen.classList.remove("screen-hidden");
-    if (title) title.textContent = "Defeat";
-    if (sub) sub.textContent = "You ran out of lives.";
+    if (title) title.textContent = result && result.won ? "Victory" : "Defeat";
+    if (sub) {
+      sub.textContent =
+        result && result.won ? "You win!" : "You ran out of lives.";
+    }
     console.log("[CBMain] defeat", result);
   }
 
@@ -95,6 +111,11 @@
   }
 
   function onMatchEnd(result) {
+    // Do NOT leave the room yet — player picks an exit on win/defeat
+    if (window.CBMultiplayerUI && CBMultiplayerUI.markMatchOver) {
+      CBMultiplayerUI.markMatchOver();
+    }
+
     if (result && result.won) {
       fillWinReward();
       if (window.CBAuth && CBAuth.isLoggedIn() && CBAuth.pushSaveNow) {
@@ -107,7 +128,7 @@
             (window.CBMenu && window.CBMenu.getConfig().fighter) ||
             "usa",
           onDone: function () {
-            /* stay on win screen until Main Menu */
+            /* stay on win screen until exit buttons */
           },
         });
       } else {
@@ -144,7 +165,14 @@
   const winMenu = document.getElementById("btn-win-menu");
   if (winMenu) {
     winMenu.addEventListener("click", function () {
-      showMenu();
+      goTitleDisconnect();
+    });
+  }
+
+  const resultMenu = document.getElementById("btn-result-menu");
+  if (resultMenu) {
+    resultMenu.addEventListener("click", function () {
+      goTitleDisconnect();
     });
   }
 

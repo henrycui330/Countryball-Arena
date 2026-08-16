@@ -19,17 +19,20 @@ window.CBNetProtocol = (function () {
     STATE: "state",
     INPUT: "input",
     HIT: "hit",
+    ROUND_KO: "round_ko",
   };
 
   function defaultWsUrl() {
     if (window.CB_MULTIPLAYER_WS_URL) {
       return String(window.CB_MULTIPLAYER_WS_URL).trim();
     }
-    if (FIXED_MULTIPLAYER_WS_URL) return FIXED_MULTIPLAYER_WS_URL;
+    // Local pages must hit the local WS (DevBot / server.js), not production.
+    // Use 127.0.0.1 so we don't land on a different process bound to localhost/:8080.
     const isLocal =
       window.location.hostname === "localhost" ||
       window.location.hostname === "127.0.0.1";
-    if (isLocal) return "ws://localhost:8080";
+    if (isLocal) return "ws://127.0.0.1:8080";
+    if (FIXED_MULTIPLAYER_WS_URL) return FIXED_MULTIPLAYER_WS_URL;
     return window.location.origin.replace(/^http/, "ws") + "/ws";
   }
 

@@ -19,9 +19,65 @@ window.CBMultiplayerUI = (function () {
   let myReady = false;
   let connected = false;
   let panel = "home"; // home | join | lobby
+  let inMatch = false;
+  let blockStart = false; // true after match until player picks an exit
+  let lobbySig = "";
+  let leaveIntent = null; // "back_to_mp" | "disconnect" | "leave_btn" | null
 
   function el(id) {
     return document.getElementById(id);
+  }
+
+  /** Leave match room (+ optional full disconnect). */
+  function leaveSession(reason, opts) {
+    const o = opts || {};
+    const hadRoom = !!roomCode;
+    leaveIntent = o.disconnect
+      ? "disconnect"
+      : reason === "back_to_multiplayer" || reason === "back_to_mp"
+        ? "back_to_mp"
+        : reason === "leave_btn"
+          ? "leave_btn"
+          : "leave";
+    if (window.CBNetClient && CBNetClient.leaveRoom) {
+      CBNetClient.leaveRoom();
+    }
+    roomCode = null;
+    roomPlayers = [];
+    lobbySig = "";
+    myReady = false;
+    isHost = false;
+    inMatch = false;
+    blockStart = false;
+    showPanel("home");
+    if (window.CBGame && CBGame.clearRemoteSnapshot) {
+      CBGame.clearRemoteSnapshot();
+    }
+    if (o.disconnect && window.CBNetClient && CBNetClient.disconnect) {
+      CBNetClient.disconnect();
+      connected = false;
+      const badge = el("mp-online-badge");
+      if (badge) {
+        badge.textContent = "Offline";
+        badge.classList.remove("is-ok");
+        badge.classList.add("is-bad");
+      }
+      setStatus("Disconnected", false);
+      leaveIntent = null;
+      console.log("[CBMultiplayerUI] leaveSession+disconnect", reason || "");
+      return;
+    }
+    if (hadRoom || leaveIntent === "back_to_mp") {
+      setStatus("Online", true);
+      console.log("[CBMultiplayerUI] leaveSession", reason || "");
+    }
+  }
+
+  /** Match ended but player is still on win/defeat — block surprise Start. */
+  function markMatchOver() {
+    inMatch = false;
+    blockStart = true;
+    console.log("[CBMultiplayerUI] markMatchOver (block Start until exit)");
   }
 
   function setStatus(text, ok) {
@@ -66,8 +122,17 @@ window.CBMultiplayerUI = (function () {
     const codeEl = el("mp-code-display");
     if (codeEl) codeEl.textContent = roomCode || "— — — — —";
 
+    const sig =
+      roomCode +
+      "|" +
+      roomPlayers
+        .map(function (p) {
+          return [p.id, p.name, p.fighter, p.ready ? 1 : 0, p.isHost ? 1 : 0].join(":");
+        })
+        .join(";");
     const list = el("mp-player-list");
-    if (list) {
+    if (list && sig !== lobbySig) {
+      lobbySig = sig;
       list.innerHTML = "";
       roomPlayers.forEach(function (p) {
         const row = document.createElement("div");
@@ -209,14 +274,32 @@ window.CBMultiplayerUI = (function () {
         if (t === "left_room") {
           roomCode = null;
           roomPlayers = [];
+          lobbySig = "";
           myReady = false;
           isHost = false;
+          inMatch = false;
           showPanel("home");
-          setStatus("Left room", true);
+          if (leaveIntent !== "disconnect") {
+            setStatus("Online", true);
+          }
+          leaveIntent = null;
           if (window.CBGame && CBGame.clearRemoteSnapshot) CBGame.clearRemoteSnapshot();
           return;
         }
         if (t === "start_match") {
+          // Only accept Start while sitting in the lobby — never from title/menu/post-match
+          if (blockStart || inMatch || panel !== "lobby" || !roomCode) {
+            console.warn(
+              "[CBMultiplayerUI] ignored surprise start_match",
+              "panel=" + panel,
+              "inMatch=" + inMatch,
+              "blockStart=" + blockStart,
+              "room=" + !!roomCode
+            );
+            return;
+          }
+          inMatch = true;
+          blockStart = false;
           beginLocalMatch(p);
           return;
         }
@@ -230,6 +313,10 @@ window.CBMultiplayerUI = (function () {
         }
         if (t === "fx") {
           if (window.CBGame && CBGame.applyRemoteFx) CBGame.applyRemoteFx(p);
+          return;
+        }
+        if (t === "round_ko") {
+          if (window.CBGame && CBGame.applyRemoteRoundKo) CBGame.applyRemoteRoundKo(p);
         }
       },
     });
@@ -345,8 +432,7 @@ window.CBMultiplayerUI = (function () {
     const leaveBtn = el("mp-leave");
     if (leaveBtn) {
       leaveBtn.addEventListener("click", function () {
-        if (!CBNetClient.leaveRoom()) setStatus("Not connected", false);
-        showPanel("home");
+        leaveSession("leave_btn");
       });
     }
 
@@ -458,5 +544,11 @@ window.CBMultiplayerUI = (function () {
     if (screen) screen.classList.add("screen-hidden");
   }
 
-  return { init: init, show: show, hide: hide };
+  return {
+    init: init,
+    show: show,
+    hide: hide,
+    leaveSession: leaveSession,
+    markMatchOver: markMatchOver,
+  };
 })();

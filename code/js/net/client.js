@@ -239,6 +239,10 @@ window.CBNetClient = (function () {
     return send("fx", fx || {});
   }
 
+  function sendRoundKo(payload) {
+    return send("round_ko", payload || {});
+  }
+
   function getState() {
     return Object.assign({}, state);
   }
@@ -257,6 +261,7 @@ window.CBNetClient = (function () {
     sendInput: sendInput,
     sendHit: sendHit,
     sendFx: sendFx,
+    sendRoundKo: sendRoundKo,
     getState: getState,
   };
 })();
