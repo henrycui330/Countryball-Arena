@@ -22,22 +22,36 @@ window.CBChinaAbilities = (function () {
 
   brushImg = load("assets/calligraphy.png", "Calligraphy");
   dumplingImg = load("assets/dumpling.webp", "Dumpling");
-  socialImg = load("assets/social_credit.gif", "Social Credit");
-  // Keep GIF frames advancing for canvas drawImage
-  (function hostGif() {
-    if (!socialImg) return;
-    socialImg.addEventListener("load", function () {
-      if (socialImg._cbHosted) return;
-      try {
-        socialImg.style.cssText =
-          "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
-        document.body.appendChild(socialImg);
-        socialImg._cbHosted = true;
-      } catch (err) {
-        /* ignore */
+
+  /** Dedicated DOM host so canvas drawImage advances GIF frames. */
+  function ensureSocialGifHost() {
+    const SRC = "assets/social_credit.gif";
+    let host = document.getElementById("cb-social-credit-gif");
+    if (!host) {
+      if (!document.body) {
+        document.addEventListener("DOMContentLoaded", ensureSocialGifHost);
+        return socialImg;
       }
-    });
-  })();
+      host = document.createElement("img");
+      host.id = "cb-social-credit-gif";
+      host.alt = "";
+      host.decoding = "async";
+      host.style.cssText =
+        "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;";
+      document.body.appendChild(host);
+      host.onload = function () {
+        console.log("[China] loaded Social Credit GIF host");
+      };
+      host.onerror = function () {
+        console.error("[China] failed " + SRC);
+      };
+    }
+    if (!host.getAttribute("src")) host.src = SRC;
+    socialImg = host;
+    host._cbHosted = true;
+    return host;
+  }
+  ensureSocialGifHost();
 
   const BRUSH = {
     w: 108,
@@ -216,6 +230,7 @@ window.CBChinaAbilities = (function () {
         finisher: !!(det && det.finisher),
         lockTime: 0.18,
         noCooldown: true,
+        c4Action: "detonate",
       };
     }
     const fx = player.facing >= 0 ? 1 : -1;
@@ -231,7 +246,7 @@ window.CBChinaAbilities = (function () {
       radius: defs.eagleStrike.radius,
     });
     console.log("[China] Dumpling C4 planted");
-    return { ok: true, finisher: false, lockTime: 0.22 };
+    return { ok: true, finisher: false, lockTime: 0.22, c4Action: "plant" };
   }
 
   function castStarsBarrage(player, opts) {
@@ -246,6 +261,7 @@ window.CBChinaAbilities = (function () {
       return { ok: false, reason: "no_ult" };
     }
     const killDmg = Math.max(foe.hp, foe.maxHp || 100) + 50;
+    ensureSocialGifHost();
     window.CBEffects.spawnSocialCredit({
       follow: foe,
       img: socialImg,
@@ -371,7 +387,7 @@ window.CBChinaAbilities = (function () {
       return brushImg;
     },
     getSocialImage: function () {
-      return socialImg;
+      return ensureSocialGifHost();
     },
   };
 })();

@@ -437,11 +437,19 @@ window.CBEffects = (function () {
   }
 
   function hostAnimatedImg(img) {
-    if (!img || img._cbHosted) return;
+    if (!img) return;
     try {
+      if (img._cbHosted && img.parentNode) return;
+      if (!document.body) {
+        document.addEventListener("DOMContentLoaded", function () {
+          hostAnimatedImg(img);
+        });
+        return;
+      }
+      img._cbHosted = false;
       img.style.cssText =
-        "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
-      document.body.appendChild(img);
+        "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;";
+      if (!img.parentNode) document.body.appendChild(img);
       img._cbHosted = true;
     } catch (err) {
       /* ignore */
@@ -1158,6 +1166,15 @@ window.CBEffects = (function () {
     for (let i = 0; i < targets.length; i++) {
       const t = targets[i];
       if (!t || t.hp <= 0) continue;
+      // Russia brotherhood minions — syrup is fighter CC only (avoids ally AI freeze)
+      if (t.ownerId) {
+        if (t._syrup) {
+          t._syrup.freeze = 0;
+          t._syrup.watch = 0;
+        }
+        if (t.freezeTimer) t.freezeTimer = 0;
+        continue;
+      }
       if (t.id === "canada") {
         if (t._syrup) {
           t._syrup.freeze = 0;

@@ -354,6 +354,7 @@ window.CBGame = (function () {
         hatId: null,
         weaponId: null,
         effectId: null,
+        freezeTimer: 0,
         _tx: null,
         _ty: null,
       };
@@ -476,7 +477,11 @@ window.CBGame = (function () {
 
   function noteCastResult(result, label) {
     if (!result || !result.ok) return;
-    if (isMultiplayer()) publishFx(label || "bash");
+    if (isMultiplayer()) {
+      const extra = {};
+      if (result.c4Action) extra.c4Action = result.c4Action;
+      publishFx(label || "bash", extra);
+    }
     if (!result.finisher) return;
     if (foeHp() <= 0) return;
     startFinisherSloMo(label);
@@ -525,6 +530,7 @@ window.CBGame = (function () {
 
   function startPlunge() {
     if (!player || player.plunging || player.grounded) return false;
+    if (player.freezeTimer > 0) return false;
     const cinema = window.CBEffects && window.CBEffects.getCinema
       ? window.CBEffects.getCinema()
       : null;
@@ -692,6 +698,7 @@ window.CBGame = (function () {
 
   function tryJump() {
     if (!player || !player.grounded || player.plunging) return;
+    if (player.freezeTimer > 0) return;
     const cinema = window.CBEffects && window.CBEffects.getCinema
       ? window.CBEffects.getCinema()
       : null;
@@ -1460,6 +1467,14 @@ window.CBGame = (function () {
       (cinema && cinema.lockControl) ||
       !!(player && player.freezeTimer > 0);
 
+    if (player && player.freezeTimer > 0) {
+      player.moveVx = 0;
+      if (player.plunging) {
+        player.plunging = false;
+        clearPlungeFx();
+      }
+    }
+
     addUlt(ultPassiveRate() * dt);
 
     if (holdingAttack && !controlsLocked && player.grounded && !player.plunging) {
@@ -1551,7 +1566,8 @@ window.CBGame = (function () {
 
     const hitList = [];
     if (target && target.hp > 0) hitList.push(target);
-    if (isBotOpponent()) hitList.push(player);
+    // Bot + MP: local human must be in hitList so remote syrup/wine zones can CC them
+    if (isBotOpponent() || isMultiplayer()) hitList.push(player);
     if (window.CBAllies) {
       const allies = window.CBAllies.getList();
       for (let i = 0; i < allies.length; i++) {
@@ -1880,10 +1896,12 @@ window.CBGame = (function () {
     const ty = remoteGhost.y;
     mpFoe._tx = tx;
     mpFoe._ty = ty;
-    // Smooth lerp — gentle to avoid rubber-band
-    const k = Math.min(1, (dt || 0.016) * 14);
-    mpFoe.x += (tx - mpFoe.x) * k;
-    mpFoe.y += (ty - mpFoe.y) * k;
+    // While syrup-frozen, hold pose (peer is also locked on their client)
+    if (!(mpFoe.freezeTimer > 0)) {
+      const k = Math.min(1, (dt || 0.016) * 14);
+      mpFoe.x += (tx - mpFoe.x) * k;
+      mpFoe.y += (ty - mpFoe.y) * k;
+    }
     mpFoe.radius = remoteGhost.radius || mpFoe.radius;
     mpFoe.facing = remoteGhost.facing;
     mpFoe.fighter = remoteGhost.fighter || mpFoe.fighter;
@@ -1982,6 +2000,9 @@ window.CBGame = (function () {
     const aimX = mpFoe.aimX;
     const aimY = mpFoe.aimY;
     const follow = mpFoe;
+    const remoteOwnerId = p.playerId
+      ? "remote:" + String(p.playerId)
+      : "remote-fx";
 
     // Hide idle weapon while swing FX owns the sprite
     if (kind === "bash" || kind === "charged" || kind === "plunge") {
@@ -2102,7 +2123,7 @@ window.CBGame = (function () {
           rx: 140,
           ry: 42,
           life: 16,
-          ownerId: "remote-fx",
+          ownerId: remoteOwnerId,
           img: syrupImg,
         });
       } else if (fighter === "china" && CBEffects.spawnDumplingMine) {
@@ -2113,11 +2134,19 @@ window.CBGame = (function () {
             : null;
         const existing =
           typeof CBEffects.getDumplingMine === "function"
-            ? CBEffects.getDumplingMine("remote-fx")
+            ? CBEffects.getDumplingMine(remoteOwnerId)
             : null;
-        if (existing && CBEffects.detonateDumplingMine) {
-          CBEffects.detonateDumplingMine(existing, { damage: 0, radius: 118 });
+        const action = p.c4Action || null;
+        if (action === "detonate" || (!action && existing)) {
+          if (existing && CBEffects.detonateDumplingMine) {
+            CBEffects.detonateDumplingMine(existing, { damage: 0, radius: 118 });
+          }
         } else {
+          if (existing) {
+            // Stale mine from a dropped detonate packet — clear before re-plant
+            existing.armed = false;
+            existing.life = 0;
+          }
           CBEffects.spawnDumplingMine({
             x: mpFoe.x + fx * 28,
             y: mpFoe.y + (mpFoe.radius || 42) * 0.55,
@@ -2125,7 +2154,7 @@ window.CBGame = (function () {
             w: 52,
             h: 52,
             life: 18,
-            ownerId: "remote-fx",
+            ownerId: remoteOwnerId,
             damage: 0,
             radius: 118,
           });
@@ -2412,6 +2441,15 @@ window.CBGame = (function () {
       ctx.beginPath();
       ctx.arc(gx, cy, gr, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (mpFoe.freezeTimer > 0 && !sil) {
+      ctx.fillStyle = "rgba(180, 230, 255, 0.45)";
+      ctx.beginPath();
+      ctx.arc(gx, cy, gr + 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(220, 245, 255, 0.9)";
+      ctx.lineWidth = 3;
+      ctx.stroke();
     }
     if (!sil) {
       const label =
