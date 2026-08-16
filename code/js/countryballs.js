@@ -53,6 +53,24 @@ window.CBCountryballs = (function () {
       special: "Acid Rain",
       ultimate: "Warship",
     },
+    china: {
+      id: "china",
+      name: "China",
+      sprite: "assets/china.png",
+      baseAtk: 17,
+      blurb: "Calligraphy · dumpling toss · C4 dumpling · social credit",
+      special: "Dumpling C4",
+      ultimate: "Social Credit",
+    },
+    canada: {
+      id: "canada",
+      name: "Canada",
+      sprite: "assets/canada.png",
+      baseAtk: 17,
+      blurb: "Hockey slap · puck toss · maple syrup · syrup bombs",
+      special: "Maple Syrup",
+      ultimate: "Syrup Bombs",
+    },
   };
 
   const KO_XP = {
@@ -125,6 +143,8 @@ window.CBCountryballs = (function () {
         russia: makeBall("russia", { owned: false }),
         france: makeBall("france", { owned: false }),
         uk: makeBall("uk", { owned: false }),
+        china: makeBall("china", { owned: false }),
+        canada: makeBall("canada", { owned: false }),
       },
     };
   }
@@ -297,7 +317,7 @@ window.CBCountryballs = (function () {
   function isCharacterOwned(id) {
     // Gacha parked: all roster fighters playable (cosmetics stay locked).
     if (window.CBGacha && CBGacha.ENABLED === false) {
-      if (id === "usa" || id === "japan" || id === "russia" || id === "france" || id === "uk") return true;
+      if (id === "usa" || id === "japan" || id === "russia" || id === "france" || id === "uk" || id === "china" || id === "canada") return true;
     }
     const b = getBall(id);
     return !!(b && b.owned);
@@ -518,7 +538,7 @@ window.CBCountryballs = (function () {
     if (!(window.CBGacha && CBGacha.ENABLED === false)) return false;
     if (!roster || !roster.balls) return false;
     let changed = false;
-    ["usa", "japan", "russia", "france", "uk"].forEach(function (id) {
+    ["usa", "japan", "russia", "france", "uk", "china", "canada"].forEach(function (id) {
       const b = roster.balls[id];
       if (b && !b.owned) {
         b.owned = true;
@@ -693,7 +713,9 @@ window.CBCountryballs = (function () {
       c.fighter === "japan" ||
       c.fighter === "russia" ||
       c.fighter === "france" ||
-      c.fighter === "uk"
+      c.fighter === "uk" ||
+      c.fighter === "china" ||
+      c.fighter === "canada"
         ? c.fighter
         : "usa";
     return addXp(fighter, xpForKo(c));

@@ -23,6 +23,8 @@ window.CBGame = (function () {
   let russiaImg = null;
   let franceImg = null;
   let ukImg = null;
+  let chinaImg = null;
+  let canadaImg = null;
   let fighterImg = null;
   let onExitToMenu = null;
   let onMatchEnd = null;
@@ -182,7 +184,11 @@ window.CBGame = (function () {
             ? "france"
             : c.fighter === "uk"
               ? "uk"
-              : "usa";
+              : c.fighter === "china"
+                ? "china"
+                : c.fighter === "canada"
+                  ? "canada"
+                  : "usa";
     let lives = null;
     if (matchType === "custom" || matchType === "multiplayer") {
       lives = Math.max(1, Math.min(100, Math.floor(c.lives || 3)));
@@ -239,6 +245,12 @@ window.CBGame = (function () {
     if (matchConfig.fighter === "uk" && window.CBUKAbilities) {
       return window.CBUKAbilities;
     }
+    if (matchConfig.fighter === "china" && window.CBChinaAbilities) {
+      return window.CBChinaAbilities;
+    }
+    if (matchConfig.fighter === "canada" && window.CBCanadaAbilities) {
+      return window.CBCanadaAbilities;
+    }
     return window.CBUsaAbilities;
   }
 
@@ -251,6 +263,8 @@ window.CBGame = (function () {
     if (matchConfig.fighter === "russia") return russiaImg;
     if (matchConfig.fighter === "france") return franceImg;
     if (matchConfig.fighter === "uk") return ukImg;
+    if (matchConfig.fighter === "china") return chinaImg;
+    if (matchConfig.fighter === "canada") return canadaImg;
     return usaImg;
   }
 
@@ -259,6 +273,8 @@ window.CBGame = (function () {
     if (id === "russia") return russiaImg;
     if (id === "france") return franceImg;
     if (id === "uk") return ukImg;
+    if (id === "china") return chinaImg;
+    if (id === "canada") return canadaImg;
     return usaImg;
   }
 
@@ -277,7 +293,11 @@ window.CBGame = (function () {
               ? "france"
               : matchConfig.fighter === "uk"
                 ? "uk"
-                : "usa",
+                : matchConfig.fighter === "china"
+                  ? "china"
+                  : matchConfig.fighter === "canada"
+                    ? "canada"
+                    : "usa",
       x: W * 0.22,
       y: spawnY,
       radius: matchConfig.fighter === "russia" ? 50 : 42,
@@ -292,6 +312,7 @@ window.CBGame = (function () {
       moveVx: 0,
       grounded: true,
       plunging: false,
+      freezeTimer: 0,
     };
     plungeFx = null;
     abilityLock = 0;
@@ -850,6 +871,18 @@ window.CBGame = (function () {
     ultCharge = Math.min(ULT_MAX, ultCharge + amount);
   }
 
+  function ultPassiveRate() {
+    const ab = abilities();
+    return ab && typeof ab.ultPassive === "number" ? ab.ultPassive : ULT_PASSIVE;
+  }
+
+  function ultDamageRate() {
+    const ab = abilities();
+    return ab && typeof ab.ultPerDamage === "number"
+      ? ab.ultPerDamage
+      : ULT_PER_DAMAGE;
+  }
+
   function releaseAttack() {
     if (!holdingAttack) return;
     holdingAttack = false;
@@ -860,6 +893,7 @@ window.CBGame = (function () {
       ? window.CBEffects.getCinema()
       : null;
     if (abilityLock > 0 || (cinema && cinema.lockControl)) return;
+    if (player && player.freezeTimer > 0) return;
     if (player && (player.plunging || !player.grounded)) return;
 
     updateAimFromMouse();
@@ -891,6 +925,7 @@ window.CBGame = (function () {
       ? window.CBEffects.getCinema()
       : null;
     if (abilityLock > 0 || (cinema && cinema.lockControl)) return;
+    if (player && player.freezeTimer > 0) return;
     updateAimFromMouse();
     const result = abilities().tryCast(
       "eagleStrike",
@@ -913,6 +948,7 @@ window.CBGame = (function () {
       ? window.CBEffects.getCinema()
       : null;
     if (abilityLock > 0 || (cinema && cinema.lockControl)) return;
+    if (player && player.freezeTimer > 0) return;
     updateAimFromMouse();
     const result = abilities().tryCast(
       "starsBarrage",
@@ -1420,9 +1456,11 @@ window.CBGame = (function () {
       ? window.CBEffects.getCinema()
       : null;
     const controlsLocked =
-      abilityLock > 0 || (cinema && cinema.lockControl);
+      abilityLock > 0 ||
+      (cinema && cinema.lockControl) ||
+      !!(player && player.freezeTimer > 0);
 
-    addUlt(ULT_PASSIVE * dt);
+    addUlt(ultPassiveRate() * dt);
 
     if (holdingAttack && !controlsLocked && player.grounded && !player.plunging) {
       holdTime += dt;
@@ -1527,10 +1565,10 @@ window.CBGame = (function () {
     if (isMultiplayer()) flushMpHits(foeHpBefore);
 
     if (target && target.hp < foeHpBefore && !isMultiplayer()) {
-      addUlt((foeHpBefore - target.hp) * ULT_PER_DAMAGE);
+      addUlt((foeHpBefore - target.hp) * ultDamageRate());
     }
     if (isMultiplayer() && mpPendingHit > 0) {
-      addUlt(mpPendingHit * ULT_PER_DAMAGE);
+      addUlt(mpPendingHit * ultDamageRate());
       mpPendingHit = 0;
     }
 
@@ -1818,6 +1856,14 @@ window.CBGame = (function () {
       const wpn = CBUKAbilities.getMeleeWeapon({ id: "uk" });
       return (wpn && wpn.img) || null;
     }
+    if (fighterId === "china" && window.CBChinaAbilities && CBChinaAbilities.getMeleeWeapon) {
+      const wpn = CBChinaAbilities.getMeleeWeapon({ id: "china" });
+      return (wpn && wpn.img) || null;
+    }
+    if (fighterId === "canada" && window.CBCanadaAbilities && CBCanadaAbilities.getMeleeWeapon) {
+      const wpn = CBCanadaAbilities.getMeleeWeapon({ id: "canada" });
+      return (wpn && wpn.img) || null;
+    }
     if (window.CBUsaAbilities && CBUsaAbilities.getMeleeWeapon) {
       const wpn = CBUsaAbilities.getMeleeWeapon({ id: fighterId || "usa" });
       return (wpn && wpn.img) || null;
@@ -1976,7 +2022,7 @@ window.CBGame = (function () {
         });
         mpFxHideWeaponUntil = Math.max(mpFxHideWeaponUntil, 0.85);
       } else if (
-        (fighter === "france" || fighter === "uk") &&
+        (fighter === "france" || fighter === "uk" || fighter === "china" || fighter === "canada") &&
         CBEffects.spawnSpriteProjectile
       ) {
         const dx = (aimX || mpFoe.x + 80) - mpFoe.x;
@@ -1985,7 +2031,15 @@ window.CBGame = (function () {
         const throwImg =
           fighter === "uk" && window.CBUKAbilities && CBUKAbilities.getTeaImage
             ? CBUKAbilities.getTeaImage()
-            : img;
+            : fighter === "china" &&
+                window.CBChinaAbilities &&
+                CBChinaAbilities.getDumplingImage
+              ? CBChinaAbilities.getDumplingImage()
+              : fighter === "canada" &&
+                  window.CBCanadaAbilities &&
+                  CBCanadaAbilities.getPuckImage
+                ? CBCanadaAbilities.getPuckImage()
+                : img;
         CBEffects.spawnSpriteProjectile(mpFoe.x, mpFoe.y, {
           vx: (dx / len) * 480,
           vy: (dy / len) * 480 - 40,
@@ -1994,8 +2048,8 @@ window.CBGame = (function () {
           damage: 0,
           ownerId: "remote-fx",
           img: throwImg,
-          w: fighter === "uk" ? 44 : 88,
-          h: fighter === "uk" ? 40 : 28,
+          w: fighter === "uk" ? 44 : fighter === "china" ? 48 : fighter === "canada" ? 34 : 88,
+          h: fighter === "uk" ? 40 : fighter === "china" ? 48 : fighter === "canada" ? 34 : 28,
           rot: Math.atan2(dy, dx),
           spin: 8,
           gravity: 380,
@@ -2036,6 +2090,46 @@ window.CBGame = (function () {
           damage: 0,
           ownerId: "remote-fx",
         });
+      } else if (fighter === "canada" && CBEffects.spawnSyrupSpill) {
+        const fx = (mpFoe.facing || 1) >= 0 ? 1 : -1;
+        const syrupImg =
+          window.CBCanadaAbilities && CBCanadaAbilities.getSyrupImage
+            ? CBCanadaAbilities.getSyrupImage()
+            : null;
+        CBEffects.spawnSyrupSpill({
+          x: mpFoe.x + fx * 78,
+          y: mpFoe.y + (mpFoe.radius || 42) * 0.55,
+          rx: 140,
+          ry: 42,
+          life: 16,
+          ownerId: "remote-fx",
+          img: syrupImg,
+        });
+      } else if (fighter === "china" && CBEffects.spawnDumplingMine) {
+        const fx = (mpFoe.facing || 1) >= 0 ? 1 : -1;
+        const dumpImg =
+          window.CBChinaAbilities && CBChinaAbilities.getDumplingImage
+            ? CBChinaAbilities.getDumplingImage()
+            : null;
+        const existing =
+          typeof CBEffects.getDumplingMine === "function"
+            ? CBEffects.getDumplingMine("remote-fx")
+            : null;
+        if (existing && CBEffects.detonateDumplingMine) {
+          CBEffects.detonateDumplingMine(existing, { damage: 0, radius: 118 });
+        } else {
+          CBEffects.spawnDumplingMine({
+            x: mpFoe.x + fx * 28,
+            y: mpFoe.y + (mpFoe.radius || 42) * 0.55,
+            img: dumpImg,
+            w: 52,
+            h: 52,
+            life: 18,
+            ownerId: "remote-fx",
+            damage: 0,
+            radius: 118,
+          });
+        }
       } else if (CBEffects.spawnBurst) {
         CBEffects.spawnBurst(aimX, aimY, 10, ["#ffffff", "#f0c43a", "#b22234"]);
       }
@@ -2078,6 +2172,37 @@ window.CBGame = (function () {
           damage: 0,
           ownerId: "remote-fx",
           hitH: 92,
+        });
+      } else if (fighter === "canada" && CBEffects.spawnSyrupBomb) {
+        const syrupImg =
+          window.CBCanadaAbilities && CBCanadaAbilities.getSyrupImage
+            ? CBCanadaAbilities.getSyrupImage()
+            : null;
+        const gy = typeof mpFoe.y === "number" ? mpFoe.y + 8 : 360;
+        for (let i = 0; i < 9; i++) {
+          CBEffects.spawnSyrupBomb({
+            x: mpFoe.x + (i - 4) * 55,
+            y: -40 - i * 40,
+            vy: 340,
+            groundY: gy,
+            delay: i * 0.1,
+            img: syrupImg,
+            damage: 0,
+            ownerId: "remote-fx",
+          });
+        }
+      } else if (fighter === "china" && CBEffects.spawnSocialCredit) {
+        const socialImg =
+          window.CBChinaAbilities && CBChinaAbilities.getSocialImage
+            ? CBChinaAbilities.getSocialImage()
+            : null;
+        CBEffects.spawnSocialCredit({
+          follow: player,
+          img: socialImg,
+          ownerId: "remote-fx",
+          damage: 0,
+          life: 1.65,
+          executeAt: 99,
         });
       } else if (CBEffects.spawnBurst) {
         CBEffects.spawnBurst(mpFoe.x, mpFoe.y, 16, ["#f0c43a", "#ffffff", "#ff4d4d"]);
@@ -2255,7 +2380,11 @@ window.CBGame = (function () {
               ? 90
               : mpFoe.fighter === "uk"
                 ? 36
-                : 68;
+                : mpFoe.fighter === "china"
+                  ? 88
+                  : mpFoe.fighter === "canada"
+                    ? 96
+                    : 68;
         const wh =
           mpFoe.fighter === "japan"
             ? 22
@@ -2265,7 +2394,11 @@ window.CBGame = (function () {
                 ? 30
                 : mpFoe.fighter === "uk"
                   ? 78
-                  : 37;
+                  : mpFoe.fighter === "china"
+                    ? 66
+                    : mpFoe.fighter === "canada"
+                      ? 36
+                      : 37;
         ctx.save();
         ctx.translate(hx, hy);
         ctx.rotate(ang);
@@ -2290,6 +2423,10 @@ window.CBGame = (function () {
               ? "France"
               : mpFoe.fighter === "uk"
                 ? "UK"
+                : mpFoe.fighter === "china"
+                  ? "China"
+                : mpFoe.fighter === "canada"
+                  ? "Canada"
                 : mpFoe.fighter === "usa"
                 ? "USA"
                 : "Rival";
@@ -2655,6 +2792,15 @@ window.CBGame = (function () {
           ctx.arc(player.x, player.y + floatY, player.radius, 0, Math.PI * 2);
           ctx.fill();
         }
+        if (player.freezeTimer > 0 && !sil) {
+          ctx.fillStyle = "rgba(180, 230, 255, 0.45)";
+          ctx.beginPath();
+          ctx.arc(player.x, player.y + floatY, player.radius + 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(220, 245, 255, 0.9)";
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
       } else {
         drawEntityCircle(
           { x: player.x, y: player.y + floatY, radius: player.radius },
@@ -2796,6 +2942,24 @@ window.CBGame = (function () {
       console.error("[CBGame] failed to load assets/uk.png");
     };
     ukImg.src = "assets/uk.png";
+
+    chinaImg = new Image();
+    chinaImg.onload = function () {
+      console.log("[CBGame] China sprite loaded");
+    };
+    chinaImg.onerror = function () {
+      console.error("[CBGame] failed to load assets/china.png");
+    };
+    chinaImg.src = "assets/china.png";
+
+    canadaImg = new Image();
+    canadaImg.onload = function () {
+      console.log("[CBGame] Canada sprite loaded");
+    };
+    canadaImg.onerror = function () {
+      console.error("[CBGame] failed to load assets/canada.png");
+    };
+    canadaImg.src = "assets/canada.png";
     fighterImg = usaImg;
 
     window.addEventListener("keydown", onKeyDown);

@@ -1,114 +1,116 @@
 /**
- * UK abilities — umbrella melee, teacup throw, acid rain, warship ride-through.
- * Same slot IDs as USA/Japan/Russia/France so the game loop stays shared.
+ * Canada abilities — hockey stick bash, puck throw, maple syrup freeze, syrup bombs.
+ * Same slot IDs as other fighters so the game loop stays shared.
  */
-window.CBUKAbilities = (function () {
-  const COLORS = ["#012169", "#ffffff", "#c8102e"];
-  let umbrellaImg = null;
-  let teaImg = null;
-  let shipImg = null;
+window.CBCanadaAbilities = (function () {
+  const COLORS = ["#ff0000", "#ffffff", "#d52b1e", "#c4a574"];
+  let stickImg = null;
+  let puckImg = null;
+  let syrupImg = null;
 
   function load(path, label, onReady) {
     const img = new Image();
     img.onload = function () {
-      console.log("[UK] loaded " + label);
+      console.log("[Canada] loaded " + label);
       if (onReady) onReady(img);
     };
     img.onerror = function () {
-      console.error("[UK] failed " + path);
+      console.error("[Canada] failed " + path);
     };
     img.src = path;
     return img;
   }
 
-  function bakeRotate180(srcImg, label) {
+  /** Horizontal flip only (mirror), not a rotation. */
+  function bakeHFlip(srcImg, label) {
     const c = document.createElement("canvas");
     c.width = srcImg.naturalWidth || srcImg.width;
     c.height = srcImg.naturalHeight || srcImg.height;
     const ctx = c.getContext("2d");
     if (!ctx || c.width <= 0) return srcImg;
-    ctx.translate(c.width / 2, c.height / 2);
-    ctx.rotate(Math.PI);
-    ctx.drawImage(srcImg, -c.width / 2, -c.height / 2);
+    ctx.translate(c.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(srcImg, 0, 0);
     const out = new Image();
     out.onload = function () {
-      console.log("[UK] rotated " + label + " 180");
+      console.log("[Canada] h-flipped " + label);
     };
     out.src = c.toDataURL("image/png");
     return out;
   }
 
-  umbrellaImg = load("assets/umbrella.webp", "Umbrella", function (img) {
-    umbrellaImg = bakeRotate180(img, "Umbrella");
+  stickImg = load("assets/hockey.webp", "Hockey stick", function (img) {
+    stickImg = bakeHFlip(img, "Hockey stick");
   });
-  teaImg = load("assets/tea.webp", "Tea");
-  shipImg = load("assets/warship.png", "Warship");
+  puckImg = load("assets/puck.png", "Puck");
+  syrupImg = load("assets/maple_syrup.png", "Maple syrup");
 
-  const UMBRELLA = {
-    w: 42,
-    h: 90,
-    pivotX: 21,
-    pivotY: 82,
-    tipX: 21,
-    tipY: 8,
+  const STICK = {
+    w: 118,
+    h: 44,
+    pivotX: 20,
+    pivotY: 22,
+    tipX: 108,
+    tipY: 22,
     handDist: 0.52,
   };
 
   const defs = {
     freedomBlast: {
       id: "freedomBlast",
-      name: "Umbrella Bash",
+      name: "Hockey Slap",
       cooldown: 0.38,
-      damage: 16,
+      damage: 17,
     },
     chargedBlast: {
       id: "chargedBlast",
-      name: "Teacup Toss",
-      cooldown: 1.05,
+      name: "Puck Toss",
+      cooldown: 1.0,
       damageMin: 24,
       damageMax: 46,
     },
     eagleStrike: {
       id: "eagleStrike",
-      name: "Acid Rain",
+      name: "Maple Syrup",
       key: "KeyE",
-      cooldown: 3.0,
-      duration: 5,
-      tick: 0.38,
-      tickDmg: 7,
-      rx: 155,
-      ry: 110,
+      cooldown: 3.2,
+      duration: 16,
+      rx: 140,
+      ry: 42,
+      freeze: 5,
+      watch: 5,
     },
     starsBarrage: {
       id: "starsBarrage",
-      name: "Warship",
+      name: "Syrup Bombs",
       key: "KeyQ",
       cooldown: 1.0,
       ultCost: 100,
-      hpPct: 0.8,
+      count: 9,
+      damage: 26,
     },
   };
 
-  function umbrellaFor(player) {
-    const ballId = (player && player.id) || "uk";
+  function stickFor(player) {
+    const ballId = (player && player.id) || "canada";
     if (window.CBCosmetics && CBCosmetics.getEquippedWeaponImage) {
       const skin = CBCosmetics.getEquippedWeaponImage(ballId);
       if (skin) return skin;
     }
-    return umbrellaImg;
+    return stickImg;
   }
 
   function wrathOn(player) {
     return !!(
       window.CBCountryballs &&
       CBCountryballs.hasWrath &&
-      CBCountryballs.hasWrath((player && player.id) || "uk")
+      CBCountryballs.hasWrath((player && player.id) || "canada")
     );
   }
 
   function auraId(player) {
     if (!window.CBCountryballs || !CBCountryballs.getEffectId) return null;
-    return CBCountryballs.getEffectId((player && player.id) || "uk");
+    return CBCountryballs.getEffectId((player && player.id) || "canada");
   }
 
   function auraPalette(player, fallback) {
@@ -146,28 +148,28 @@ window.CBUKAbilities = (function () {
     const finisher = willKo(dmg, options.foeHp);
     window.CBEffects.spawnDeagleBash({
       follow: player,
-      img: umbrellaFor(player),
-      w: UMBRELLA.w,
-      h: UMBRELLA.h,
-      pivotX: UMBRELLA.pivotX,
-      pivotY: UMBRELLA.pivotY,
-      muzzleLocalX: UMBRELLA.tipX,
-      muzzleLocalY: UMBRELLA.tipY,
+      img: stickFor(player),
+      w: STICK.w,
+      h: STICK.h,
+      pivotX: STICK.pivotX,
+      pivotY: STICK.pivotY,
+      muzzleLocalX: STICK.tipX,
+      muzzleLocalY: STICK.tipY,
       aimX: player.aimX,
       aimY: player.aimY,
       damage: dmg,
-      hitRadius: 38,
-      reach: player.radius + 88,
-      knockback: 155,
+      hitRadius: 40,
+      reach: player.radius + 95,
+      knockback: 165,
       ownerId: player.id,
-      handDist: UMBRELLA.handDist,
+      handDist: STICK.handDist,
       life: 0.3,
-      swingFrom: -1.5,
-      swingTo: 0.35,
+      swingFrom: -1.35,
+      swingTo: 0.45,
       finisher: finisher,
       wrath: wrathOn(player),
     });
-    console.log("[UK] Umbrella Bash" + (finisher ? " FINISHER" : ""));
+    console.log("[Canada] Hockey Slap" + (finisher ? " FINISHER" : ""));
     return { ok: true, finisher: finisher };
   }
 
@@ -182,96 +184,90 @@ window.CBUKAbilities = (function () {
     const a = aimVec(player);
     const muzzleX = player.x + a.x * (player.radius + 10);
     const muzzleY = player.y + a.y * (player.radius + 4);
-    const spd = 400 + 200 * t;
+    const spd = 520 + 220 * t;
     window.CBEffects.spawnSpriteProjectile(muzzleX, muzzleY, {
       vx: a.x * spd,
-      vy: a.y * spd - 50,
-      life: 1.4,
-      radius: 20,
+      vy: a.y * spd - 30,
+      life: 1.25,
+      radius: 16,
       damage: dmg,
       ownerId: player.id,
-      img: teaImg,
-      w: 44,
-      h: 40,
+      img: puckImg,
+      w: 34,
+      h: 34,
       rot: 0,
-      spin: 10 + t * 6,
-      gravity: 420,
+      spin: 14 + t * 8,
+      gravity: 280,
       homing: false,
       finisher: finisher,
     });
-    window.CBEffects.spawnBurst(muzzleX, muzzleY, 7, auraPalette(player, COLORS));
-    console.log("[UK] Teacup Toss dmg=" + dmg + (finisher ? " FINISHER" : ""));
+    window.CBEffects.spawnBurst(muzzleX, muzzleY, 6, auraPalette(player, COLORS));
+    console.log("[Canada] Puck Toss dmg=" + dmg + (finisher ? " FINISHER" : ""));
     return { ok: true, charge: t, finisher: finisher };
   }
 
   function castEagleStrike(player, opts) {
-    const fx = player.facing >= 0 ? 1 : -1;
-    const px = player.x + fx * 70;
-    const py = player.y - 20;
-    if (!window.CBEffects.spawnAcidRain) {
-      console.error("[UK] spawnAcidRain missing");
-      return { ok: false, reason: "no_rain" };
+    if (!window.CBEffects.spawnSyrupSpill) {
+      console.error("[Canada] spawnSyrupSpill missing");
+      return { ok: false, reason: "no_syrup" };
     }
-    window.CBEffects.spawnAcidRain({
-      x: px,
-      y: py,
+    const fx = player.facing >= 0 ? 1 : -1;
+    window.CBEffects.spawnSyrupSpill({
+      x: player.x + fx * 78,
+      y: player.y + (player.radius || 42) * 0.55,
       rx: defs.eagleStrike.rx,
       ry: defs.eagleStrike.ry,
       life: defs.eagleStrike.duration,
-      tick: defs.eagleStrike.tick,
-      damage: defs.eagleStrike.tickDmg,
+      freeze: defs.eagleStrike.freeze,
+      watch: defs.eagleStrike.watch,
       ownerId: player.id,
+      img: syrupImg,
     });
-    console.log("[UK] Acid Rain at", Math.round(px), Math.round(py));
+    console.log("[Canada] Maple syrup spill");
     return { ok: true, finisher: false, lockTime: 0.28 };
   }
 
   function castStarsBarrage(player, opts) {
     const options = opts || {};
     const foe = options.foe;
-    const baseHp = (foe && foe.maxHp) || 100;
-    const dmg = Math.max(1, Math.round(baseHp * (defs.starsBarrage.hpPct || 0.8)));
-    const finisher = willKo(dmg, options.foeHp);
-    const dir = player.facing >= 0 ? 1 : -1;
+    const dmg = defs.starsBarrage.damage;
+    const finisher = willKo(dmg * 2, options.foeHp);
+    if (!window.CBEffects.spawnSyrupBomb) {
+      console.error("[Canada] spawnSyrupBomb missing");
+      return { ok: false, reason: "no_bombs" };
+    }
+    const count = defs.starsBarrage.count;
+    const baseX = foe && foe.hp > 0 ? foe.x : player.x + player.facing * 120;
     const groundY =
       typeof options.groundY === "number"
         ? options.groundY
-        : player.y + (player.radius || 42) * 0.15;
-    if (!window.CBEffects.spawnWarship) {
-      console.error("[UK] spawnWarship missing");
-      return { ok: false, reason: "no_ship" };
+        : player.y + (player.radius || 42) * 0.2;
+    for (let i = 0; i < count; i++) {
+      const spread = (i - (count - 1) / 2) * 70 + (Math.random() - 0.5) * 36;
+      window.CBEffects.spawnSyrupBomb({
+        x: baseX + spread,
+        y: -40 - i * 55 - Math.random() * 40,
+        vy: 320 + Math.random() * 80,
+        vx: (Math.random() - 0.5) * 40,
+        groundY: groundY,
+        delay: i * 0.11,
+        img: syrupImg,
+        w: 56,
+        h: 78,
+        damage: dmg,
+        radius: 78,
+        ownerId: player.id,
+        finisher: finisher && i === 0,
+      });
     }
-    const w = 2240;
-    const h = 840;
-    const startX = dir > 0 ? -w * 0.45 : 960 + w * 0.45;
-    window.CBEffects.spawnWarship({
-      x: startX,
-      groundY: groundY,
-      vx: dir * 430,
-      w: w,
-      h: h,
-      img: shipImg,
-      facing: dir,
-      damage: dmg,
-      ownerId: player.id,
-      finisher: finisher,
-      hitH: 92,
-    });
     window.CBEffects.spawnBurst(
       player.x,
       player.y - 20,
-      16,
+      14,
       auraPalette(player, COLORS)
     );
-    console.log(
-      "[UK] Warship ride-through dmg=" +
-        dmg +
-        " (80% of maxHp " +
-        baseHp +
-        ")" +
-        (finisher ? " FINISHER" : "")
-    );
-    return { ok: true, finisher: finisher, lockTime: 0.2 };
+    console.log("[Canada] Syrup bomb rain ×" + count);
+    return { ok: true, finisher: finisher, lockTime: 0.35 };
   }
 
   function tryCast(abilityId, player, cooldowns, opts) {
@@ -280,14 +276,14 @@ window.CBUKAbilities = (function () {
     const options = opts || {};
     const cd = cooldowns[abilityId] || 0;
     if (cd > 0) {
-      console.log("[UK] " + def.name + " on cooldown (" + cd.toFixed(2) + "s)");
+      console.log("[Canada] " + def.name + " on cooldown (" + cd.toFixed(2) + "s)");
       return { ok: false, reason: "cooldown" };
     }
     if (abilityId === "starsBarrage") {
       const ult = options.ultCharge || 0;
       if (ult < def.ultCost) {
         console.log(
-          "[UK] Ultimate not charged (" + ult.toFixed(0) + "/" + def.ultCost + ")"
+          "[Canada] Ultimate not charged (" + ult.toFixed(0) + "/" + def.ultCost + ")"
         );
         return { ok: false, reason: "ult_charge" };
       }
@@ -335,39 +331,39 @@ window.CBUKAbilities = (function () {
 
   function getMeleeWeapon(player) {
     return {
-      img: umbrellaFor(player),
-      w: UMBRELLA.w,
-      h: UMBRELLA.h,
-      pivotX: UMBRELLA.pivotX,
-      pivotY: UMBRELLA.pivotY,
-      muzzleLocalX: UMBRELLA.tipX,
-      muzzleLocalY: UMBRELLA.tipY,
-      handDist: UMBRELLA.handDist,
-      plungeDamage: 22,
+      img: stickFor(player),
+      w: STICK.w,
+      h: STICK.h,
+      pivotX: STICK.pivotX,
+      pivotY: STICK.pivotY,
+      muzzleLocalX: STICK.tipX,
+      muzzleLocalY: STICK.tipY,
+      handDist: STICK.handDist,
+      plungeDamage: 24,
     };
   }
 
   return {
-    name: "UK",
-    spritePath: "assets/uk.png",
-    umbrellaPath: "assets/umbrella.webp",
-    teaPath: "assets/tea.webp",
-    shipPath: "assets/warship.png",
-    hudSpecial: "E Acid Rain",
+    name: "Canada",
+    spritePath: "assets/canada.png",
+    stickPath: "assets/hockey.webp",
+    puckPath: "assets/puck.png",
+    syrupPath: "assets/maple_syrup.png",
+    hudSpecial: "E Maple Syrup",
     defs: defs,
     tryCast: tryCast,
     tickEagleTrail: tickEagleTrail,
     tickChargeHold: tickChargeHold,
     aimVec: aimVec,
     getMeleeWeapon: getMeleeWeapon,
-    getUmbrellaImage: function () {
-      return umbrellaImg;
+    getStickImage: function () {
+      return stickImg;
     },
-    getTeaImage: function () {
-      return teaImg;
+    getPuckImage: function () {
+      return puckImg;
     },
-    getShipImage: function () {
-      return shipImg;
+    getSyrupImage: function () {
+      return syrupImg;
     },
   };
 })();

@@ -23,11 +23,15 @@ window.CBWinCelebration = (function () {
   let russiaImg = null;
   let franceImg = null;
   let ukImg = null;
+  let chinaImg = null;
+  let canadaImg = null;
   let deagleImg = null;
   let katanaImg = null;
   let absolutImg = null;
   let baguetteImg = null;
   let umbrellaImg = null;
+  let brushImg = null;
+  let stickImg = null;
 
   let camZoom = 1;
   let camX = W / 2;
@@ -144,10 +148,52 @@ window.CBWinCelebration = (function () {
         "assets/uk.png";
     }
     if (!umbrellaImg) {
-      umbrellaImg = new Image();
-      umbrellaImg.src =
-        (window.CBUKAbilities && window.CBUKAbilities.umbrellaPath) ||
-        "assets/umbrella.webp";
+      umbrellaImg =
+        window.CBUKAbilities && CBUKAbilities.getUmbrellaImage
+          ? CBUKAbilities.getUmbrellaImage()
+          : null;
+      if (!umbrellaImg) {
+        umbrellaImg = new Image();
+        umbrellaImg.src =
+          (window.CBUKAbilities && window.CBUKAbilities.umbrellaPath) ||
+          "assets/umbrella.webp";
+      }
+    }
+    if (!chinaImg) {
+      chinaImg = new Image();
+      chinaImg.src =
+        (window.CBChinaAbilities && window.CBChinaAbilities.spritePath) ||
+        "assets/china.png";
+    }
+    if (!brushImg) {
+      brushImg =
+        window.CBChinaAbilities && CBChinaAbilities.getBrushImage
+          ? CBChinaAbilities.getBrushImage()
+          : null;
+      if (!brushImg) {
+        brushImg = new Image();
+        brushImg.src =
+          (window.CBChinaAbilities && window.CBChinaAbilities.brushPath) ||
+          "assets/calligraphy.png";
+      }
+    }
+    if (!canadaImg) {
+      canadaImg = new Image();
+      canadaImg.src =
+        (window.CBCanadaAbilities && window.CBCanadaAbilities.spritePath) ||
+        "assets/canada.png";
+    }
+    if (!stickImg) {
+      stickImg =
+        window.CBCanadaAbilities && CBCanadaAbilities.getStickImage
+          ? CBCanadaAbilities.getStickImage()
+          : null;
+      if (!stickImg) {
+        stickImg = new Image();
+        stickImg.src =
+          (window.CBCanadaAbilities && window.CBCanadaAbilities.stickPath) ||
+          "assets/hockey.webp";
+      }
     }
     // Prefer equipped skin for win flourish
     if (window.CBCosmetics && CBCosmetics.getEquippedWeaponPath) {
@@ -183,7 +229,7 @@ window.CBWinCelebration = (function () {
     onDone = opts && opts.onDone;
     const f = opts && opts.fighter;
     fighter =
-      f === "japan" || f === "russia" || f === "france" || f === "uk" ? f : "usa";
+      f === "japan" || f === "russia" || f === "france" || f === "uk" || f === "china" || f === "canada" ? f : "usa";
     ballR = fighter === "russia" ? 108 : 96;
 
     t = 0;
@@ -361,23 +407,86 @@ window.CBWinCelebration = (function () {
     const useBottle = fighter === "russia";
     const useBread = fighter === "france";
     const useBrolly = fighter === "uk";
+    const useBrush = fighter === "china";
+    const useStick = fighter === "canada";
     const handX = ballX + ballR * (useBottle ? 0.42 : 0.55);
     const handY =
       ballY +
-      ballR * (useBottle ? -0.15 : useBrolly ? -0.05 : 0.08) +
+      ballR *
+        (useBottle
+          ? -0.15
+          : useBrolly
+            ? -0.05
+            : useBrush
+              ? 0.02
+              : useStick
+                ? 0.05
+                : 0.08) +
       gunDip +
       (useBottle ? drinkBob : 0);
-    const gw = useBottle ? 58 : useBread ? 130 : useBrolly ? 48 : 110;
-    const gh = useBottle ? 100 : useBread ? 42 : useBrolly ? 110 : 60;
-    const pivotX = useBottle ? gw * 0.5 : useBrolly ? gw * 0.5 : gw * 0.34;
-    const pivotY = useBottle ? gh * 0.82 : useBrolly ? gh * 0.88 : gh * 0.58;
+    const gw = useBottle
+      ? 58
+      : useBread
+        ? 130
+        : useBrolly
+          ? 48
+          : useBrush
+            ? 120
+            : useStick
+              ? 130
+              : 110;
+    const gh = useBottle
+      ? 100
+      : useBread
+        ? 42
+        : useBrolly
+          ? 110
+          : useBrush
+            ? 90
+            : useStick
+              ? 48
+              : 60;
+    const pivotX = useBottle
+      ? gw * 0.5
+      : useBrolly
+        ? gw * 0.5
+        : useBrush
+          ? gw * 0.85
+          : useStick
+            ? gw * 0.18
+            : gw * 0.34;
+    const pivotY = useBottle
+      ? gh * 0.82
+      : useBrolly
+        ? gh * 0.88
+        : useBrush
+          ? gh * 0.34
+          : useStick
+            ? gh * 0.5
+            : gh * 0.58;
+    const liveUmbrella =
+      window.CBUKAbilities && CBUKAbilities.getUmbrellaImage
+        ? CBUKAbilities.getUmbrellaImage()
+        : null;
+    const liveBrush =
+      window.CBChinaAbilities && CBChinaAbilities.getBrushImage
+        ? CBChinaAbilities.getBrushImage()
+        : null;
+    const liveStick =
+      window.CBCanadaAbilities && CBCanadaAbilities.getStickImage
+        ? CBCanadaAbilities.getStickImage()
+        : null;
     const img = useBottle
       ? absolutImg
       : useBread
         ? baguetteImg
         : useBrolly
-          ? umbrellaImg
-          : deagleImg;
+          ? liveUmbrella || umbrellaImg
+          : useBrush
+            ? liveBrush || brushImg
+            : useStick
+              ? liveStick || stickImg
+              : deagleImg;
 
     ctx.save();
     ctx.translate(handX, handY);
@@ -426,7 +535,11 @@ window.CBWinCelebration = (function () {
             ? franceImg
             : fighter === "uk"
               ? ukImg
-              : usaImg;
+              : fighter === "china"
+                ? chinaImg
+                : fighter === "canada"
+                  ? canadaImg
+                  : usaImg;
     ctx.save();
     ctx.translate(ballX, ballY);
     if (img && img.complete && img.naturalWidth) {
@@ -442,7 +555,11 @@ window.CBWinCelebration = (function () {
               ? "#002395"
               : fighter === "uk"
                 ? "#012169"
-                : "#b22234";
+                : fighter === "china"
+                  ? "#de2910"
+                  : fighter === "canada"
+                    ? "#ff0000"
+                    : "#b22234";
       ctx.beginPath();
       ctx.arc(0, 0, ballR, 0, Math.PI * 2);
       ctx.fill();

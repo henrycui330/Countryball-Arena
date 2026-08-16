@@ -1,11 +1,13 @@
 window.CBMultiplayerUI = (function () {
-  const FIGHTER_LABEL = { usa: "USA", japan: "Japan", russia: "Russia", france: "France", uk: "UK" };
+  const FIGHTER_LABEL = { usa: "USA", japan: "Japan", russia: "Russia", france: "France", uk: "UK", china: "China", canada: "Canada" };
   const FIGHTER_SPRITE = {
     usa: "assets/usa.png",
     japan: "assets/japan.png",
     russia: "assets/russia.png",
     france: "assets/france.png",
     uk: "assets/uk.png",
+    china: "assets/china.png",
+    canada: "assets/canada.png",
   };
 
   let onStartMatch = null;

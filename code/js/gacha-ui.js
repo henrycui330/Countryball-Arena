@@ -39,6 +39,8 @@ window.CBGachaUI = (function () {
       if (r.id === "usa") return "assets/usa.png";
       if (r.id === "france") return "assets/france.png";
       if (r.id === "uk") return "assets/uk.png";
+      if (r.id === "china") return "assets/china.png";
+      if (r.id === "canada") return "assets/canada.png";
     }
     if (r.type === "weapon") {
       if (r.id === "wpn_deagle_gold") return "assets/weapons/deagle_gold.png";

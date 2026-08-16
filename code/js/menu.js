@@ -26,6 +26,8 @@ window.CBMenu = (function () {
     russia: "Russia",
     france: "France",
     uk: "UK",
+    china: "China",
+    canada: "Canada",
   };
 
   const FIGHTER_SPRITE = {
@@ -34,6 +36,8 @@ window.CBMenu = (function () {
     russia: "assets/russia.png",
     france: "assets/france.png",
     uk: "assets/uk.png",
+    china: "assets/china.png",
+    canada: "assets/canada.png",
   };
 
   const LIVES_MIN = 1;
@@ -266,7 +270,7 @@ window.CBMenu = (function () {
   }
 
   function setFighter(id) {
-    if (id !== "usa" && id !== "japan" && id !== "russia" && id !== "france" && id !== "uk") return;
+    if (id !== "usa" && id !== "japan" && id !== "russia" && id !== "france" && id !== "uk" && id !== "china" && id !== "canada") return;
     if (!fighterOwned(id)) {
       console.warn("[CBMenu] fighter locked:", id);
       return;

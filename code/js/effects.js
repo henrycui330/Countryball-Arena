@@ -37,11 +37,13 @@ window.CBEffects = (function () {
           e.type === "deagleSpin" ||
           e.type === "eagleFly" ||
           e.type === "warship" ||
+          e.type === "socialCredit" ||
           e.type === "katanaStrike" ||
           e.type === "katanaCharge" ||
           e.type === "japanUlt" ||
           e.type === "vodkaBarrage" ||
-          (e.type === "baguetteMissile" && e.phase === "dive"))
+          (e.type === "baguetteMissile" && e.phase === "dive") ||
+          (e.type === "syrupBomb" && e.phase === "fall" && !e.hit))
       );
     });
   }
@@ -267,6 +269,71 @@ window.CBEffects = (function () {
     return false;
   }
 
+  function spawnSyrupSpill(opts) {
+    const o = opts || {};
+    const life = o.life ?? 16;
+    console.log(
+      "[CBEffects] maple syrup at",
+      Math.round(o.x || 0),
+      Math.round(o.y || 0)
+    );
+    return add({
+      type: "syrupPuddle",
+      x: o.x ?? 0,
+      y: o.y ?? 0,
+      rx: o.rx ?? 140,
+      ry: o.ry ?? 42,
+      life: life,
+      maxLife: life,
+      freeze: o.freeze ?? 5,
+      watch: o.watch ?? 5,
+      ownerId: o.ownerId || null,
+      img: o.img || null,
+    });
+  }
+
+  function syrupAt(x, y) {
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e.type !== "syrupPuddle" || e.life <= 0) continue;
+      const dx = (x - e.x) / (e.rx || 140);
+      const dy = (y - e.y) / (e.ry || 42);
+      if (dx * dx + dy * dy <= 1) return e;
+    }
+    return null;
+  }
+
+  function isFrozen(ent) {
+    return !!(ent && ent._syrup && ent._syrup.freeze > 0);
+  }
+
+  function spawnSyrupBomb(opts) {
+    const o = opts || {};
+    const life = o.life ?? 3.5;
+    return add({
+      type: "syrupBomb",
+      x: o.x ?? 0,
+      y: o.y ?? -40,
+      vx: o.vx ?? 0,
+      vy: o.vy ?? 340,
+      groundY: o.groundY ?? 380,
+      wait: o.delay ?? 0,
+      phase: o.delay > 0 ? "wait" : "fall",
+      img: o.img || null,
+      w: o.w ?? 56,
+      h: o.h ?? 78,
+      life: life,
+      maxLife: life,
+      damage: o.damage ?? 26,
+      radius: o.radius ?? 78,
+      ownerId: o.ownerId || null,
+      finisher: !!o.finisher,
+      hit: false,
+      rot: (Math.random() - 0.5) * 0.6,
+      spin: (Math.random() - 0.5) * 4,
+    });
+  }
+
   function inAcidRain(x, y) {
     for (let i = 0; i < list.length; i++) {
       const e = list[i];
@@ -295,6 +362,112 @@ window.CBEffects = (function () {
       damage: o.damage ?? 7,
       ownerId: o.ownerId || null,
       drops: [],
+    });
+  }
+
+  function spawnDumplingMine(opts) {
+    const o = opts || {};
+    const life = o.life ?? 18;
+    // Keep GIF/animation host for social credit elsewhere; mines are static sprites
+    console.log(
+      "[CBEffects] dumpling mine at",
+      Math.round(o.x || 0),
+      Math.round(o.y || 0)
+    );
+    return add({
+      type: "dumplingMine",
+      x: o.x ?? 0,
+      y: o.y ?? 0,
+      img: o.img || null,
+      w: o.w ?? 52,
+      h: o.h ?? 52,
+      life: life,
+      maxLife: life,
+      ownerId: o.ownerId || null,
+      damage: o.damage ?? 42,
+      radius: o.radius ?? 118,
+      armed: true,
+      blink: 0,
+    });
+  }
+
+  function getDumplingMine(ownerId) {
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (
+        e.type === "dumplingMine" &&
+        e.life > 0 &&
+        e.armed &&
+        e.ownerId === ownerId
+      ) {
+        return e;
+      }
+    }
+    return null;
+  }
+
+  function detonateDumplingMine(mine, opts) {
+    const o = opts || {};
+    if (!mine || !mine.armed) return { finisher: false };
+    mine.armed = false;
+    mine.life = 0;
+    const dmg = o.damage != null ? o.damage : mine.damage || 42;
+    const radius = o.radius != null ? o.radius : mine.radius || 118;
+    spawnExplosion(mine.x, mine.y, {
+      power: 1.35,
+      colors: ["#de2910", "#ffde00", "#ffffff", "#c4a574"],
+    });
+    spawnShockwave(mine.x, mine.y, {
+      color: "rgba(222,41,16,0.55)",
+      maxRadius: radius,
+      life: 0.35,
+    });
+    add({
+      type: "dumplingBoom",
+      x: mine.x,
+      y: mine.y,
+      life: 0.05,
+      maxLife: 0.05,
+      damage: dmg,
+      radius: radius,
+      ownerId: mine.ownerId,
+    });
+    console.log("[CBEffects] dumpling C4 boom dmg=" + dmg);
+    return { finisher: false };
+  }
+
+  function hostAnimatedImg(img) {
+    if (!img || img._cbHosted) return;
+    try {
+      img.style.cssText =
+        "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
+      document.body.appendChild(img);
+      img._cbHosted = true;
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function spawnSocialCredit(opts) {
+    const o = opts || {};
+    const life = o.life ?? 1.65;
+    if (o.img) hostAnimatedImg(o.img);
+    console.log("[CBEffects] SOCIAL CREDIT DOWN");
+    return add({
+      type: "socialCredit",
+      follow: o.follow || null,
+      x: o.x != null ? o.x : (o.follow && o.follow.x) || 0,
+      y: o.y != null ? o.y : (o.follow && o.follow.y) || 0,
+      img: o.img || null,
+      w: o.w ?? 320,
+      h: o.h ?? 220,
+      life: life,
+      maxLife: life,
+      executeAt: o.executeAt ?? 0.55,
+      executed: false,
+      damage: o.damage ?? 9999,
+      ownerId: o.ownerId || null,
+      finisher: true,
     });
   }
 
@@ -981,8 +1154,68 @@ window.CBEffects = (function () {
     e.vy = Math.sin(cur) * speed;
   }
 
+  function tickSyrupFreeze(targets, dt) {
+    for (let i = 0; i < targets.length; i++) {
+      const t = targets[i];
+      if (!t || t.hp <= 0) continue;
+      if (t.id === "canada") {
+        if (t._syrup) {
+          t._syrup.freeze = 0;
+          t._syrup.watch = 0;
+        }
+        t.freezeTimer = 0;
+        continue;
+      }
+      const puddle = syrupAt(t.x, t.y);
+      if (puddle && puddle.ownerId && t.id === puddle.ownerId) continue;
+      if (puddle && puddle.ownerId && t.ownerId === puddle.ownerId) continue;
+
+      if (!t._syrup) t._syrup = { freeze: 0, watch: 0 };
+      const s = t._syrup;
+      const freezeDur = (puddle && puddle.freeze) || 5;
+      const watchDur = (puddle && puddle.watch) || 5;
+      const inside = !!puddle;
+
+      if (s.freeze > 0) {
+        s.freeze = Math.max(0, s.freeze - dt);
+        t.freezeTimer = s.freeze;
+        t.stunTimer = Math.max(t.stunTimer || 0, 0.08);
+        if (s.freeze <= 0) {
+          s.watch = watchDur;
+          t.freezeTimer = 0;
+          console.log(
+            "[CBEffects] syrup thaw " + t.id + " — watch " + watchDur + "s"
+          );
+        }
+      } else if (inside) {
+        if (s.watch > 0) {
+          s.watch = Math.max(0, s.watch - dt);
+          if (s.watch <= 0) {
+            s.freeze = freezeDur;
+            t.freezeTimer = s.freeze;
+            t.stunTimer = Math.max(t.stunTimer || 0, freezeDur);
+            t.flash = 0.25;
+            spawnBurst(t.x, t.y, 8, ["#c4782a", "#ffe6a0", "#ffffff"]);
+            console.log("[CBEffects] syrup RE-FREEZE " + t.id);
+          }
+        } else {
+          s.freeze = freezeDur;
+          t.freezeTimer = s.freeze;
+          t.stunTimer = Math.max(t.stunTimer || 0, freezeDur);
+          t.flash = 0.25;
+          spawnBurst(t.x, t.y, 8, ["#c4782a", "#ffe6a0", "#ffffff"]);
+          console.log("[CBEffects] syrup FREEZE " + t.id);
+        }
+      } else {
+        s.watch = 0;
+        t.freezeTimer = 0;
+      }
+    }
+  }
+
   function update(dt, hitTargets) {
     const targets = hitTargets || [];
+    tickSyrupFreeze(targets, dt);
 
     for (let i = list.length - 1; i >= 0; i--) {
       const e = list[i];
@@ -1579,6 +1812,93 @@ window.CBEffects = (function () {
         }
       }
 
+      if (e.type === "syrupPuddle") {
+        /* freeze tick runs once per frame below */
+      }
+
+      if (e.type === "syrupBomb") {
+        if (e.phase === "wait") {
+          e.wait -= dt;
+          if (e.wait <= 0) e.phase = "fall";
+        } else if (e.phase === "fall") {
+          e.vy += 520 * dt;
+          e.x += e.vx * dt;
+          e.y += e.vy * dt;
+          e.rot += (e.spin || 0) * dt;
+          if (e.y >= e.groundY) {
+            e.y = e.groundY;
+            e.hit = true;
+            e.life = 0;
+            spawnExplosion(e.x, e.y, {
+              power: 0.85,
+              colors: ["#c4782a", "#8b4513", "#ffe6a0", "#ffffff"],
+            });
+            spawnShockwave(e.x, e.y, {
+              color: "rgba(196,120,42,0.55)",
+              maxRadius: e.radius || 78,
+              life: 0.28,
+            });
+            const rr = e.radius || 78;
+            for (const t of targets) {
+              if (t.id === e.ownerId || t.hp <= 0) continue;
+              if (t.ownerId && t.ownerId === e.ownerId) continue;
+              if (t.invuln) continue;
+              if (Math.hypot(t.x - e.x, t.y - e.y) > rr + (t.radius || 30) * 0.3) {
+                continue;
+              }
+              t.hp = Math.max(0, t.hp - (e.damage || 26));
+              t.flash = 0.3;
+              console.log(
+                "[CBEffects] syrup bomb hit " + t.id + " hp=" + t.hp
+              );
+            }
+          }
+        }
+      }
+
+      if (e.type === "dumplingMine") {
+        e.blink = (e.blink || 0) + dt;
+        // Soft pulse only — no contact damage until detonated
+      }
+
+      if (e.type === "dumplingBoom") {
+        const rr = e.radius || 118;
+        for (const t of targets) {
+          if (t.id === e.ownerId || t.hp <= 0) continue;
+          if (t.ownerId && t.ownerId === e.ownerId) continue;
+          if (t.invuln) continue;
+          const dist = Math.hypot(t.x - e.x, t.y - e.y);
+          if (dist > rr + (t.radius || 30) * 0.35) continue;
+          t.hp = Math.max(0, t.hp - (e.damage || 42));
+          t.flash = 0.35;
+          const push = dist > 1 ? (t.x - e.x) / dist : 1;
+          t.x += push * 36;
+          console.log(
+            "[CBEffects] dumpling boom hit " + t.id + " hp=" + t.hp
+          );
+        }
+        e.life = 0;
+      }
+
+      if (e.type === "socialCredit") {
+        if (e.follow) {
+          e.x = e.follow.x;
+          e.y = e.follow.y - (e.follow.radius || 42) * 0.2;
+        }
+        const elapsed = (e.maxLife || 1.65) - e.life;
+        if (!e.executed && elapsed >= (e.executeAt || 0.55)) {
+          e.executed = true;
+          const t = e.follow;
+          if (t && t.hp > 0 && t.id !== e.ownerId && !t.invuln) {
+            t.hp = 0;
+            t.flash = 0.6;
+            spawnBurst(t.x, t.y, 28, ["#de2910", "#ffffff", "#ffde00"]);
+            if (window.CBCamera && CBCamera.addShake) CBCamera.addShake(1.0);
+            console.log("[CBEffects] SOCIAL CREDIT execute — " + t.id + " KO");
+          }
+        }
+      }
+
       if (e.type === "warship") {
         e.x += e.vx * dt;
         const visHalf = (e.w || 2240) * 0.5;
@@ -1918,6 +2238,52 @@ window.CBEffects = (function () {
           ctx.stroke();
         }
         ctx.restore();
+      } else if (e.type === "dumplingMine") {
+        const pulse = 1 + Math.sin((e.blink || 0) * 10) * 0.06;
+        const alpha = Math.min(1, e.life / 0.4);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(e.x, e.y);
+        ctx.scale(pulse, pulse);
+        if (e.img && e.img.complete && e.img.naturalWidth) {
+          ctx.drawImage(e.img, -e.w / 2, -e.h / 2, e.w, e.h);
+        } else {
+          ctx.fillStyle = "#c4a574";
+          ctx.beginPath();
+          ctx.arc(0, 0, 18, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Armed blink ring
+        ctx.strokeStyle =
+          Math.floor((e.blink || 0) * 6) % 2 === 0
+            ? "rgba(222,41,16,0.9)"
+            : "rgba(255,222,0,0.85)";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, (e.w || 52) * 0.42, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (e.type === "socialCredit") {
+        const elapsed = (e.maxLife || 1.65) - e.life;
+        const fadeIn = Math.min(1, elapsed / 0.05);
+        const fadeOut = Math.min(1, e.life / 0.25);
+        const alpha = fadeIn * fadeOut;
+        const pop = 0.85 + Math.min(1, elapsed / 0.35) * 0.35;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(e.x, e.y - 30);
+        ctx.scale(pop, pop);
+        if (e.img && e.img.complete && e.img.naturalWidth) {
+          ctx.drawImage(e.img, -e.w / 2, -e.h / 2, e.w, e.h);
+        } else {
+          ctx.fillStyle = "#de2910";
+          ctx.fillRect(-e.w / 2, -e.h / 2, e.w, e.h);
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 28px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("SOCIAL CREDIT", 0, 0);
+        }
+        ctx.restore();
       } else if (e.type === "warship") {
         ctx.save();
         ctx.globalAlpha = 0.32 * Math.min(1, e.life / 0.35);
@@ -2017,6 +2383,48 @@ window.CBEffects = (function () {
         ctx.ellipse(0, 0, e.rx, e.ry, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
+      } else if (e.type === "syrupPuddle") {
+        const fade = Math.min(1, e.life / 0.6);
+        const born = 1 - Math.max(0, e.life) / (e.maxLife || 16);
+        const grow = Math.min(1, born * 3.5);
+        ctx.save();
+        ctx.globalAlpha = 0.78 * fade;
+        ctx.translate(e.x, e.y);
+        ctx.scale(grow, grow);
+        ctx.fillStyle = "rgba(180, 90, 20, 0.88)";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, e.rx, e.ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255, 190, 80, 0.55)";
+        ctx.beginPath();
+        ctx.ellipse(-e.rx * 0.2, -e.ry * 0.15, e.rx * 0.5, e.ry * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(120, 50, 10, 0.65)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, e.rx, e.ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        if (e.img && e.img.complete && e.img.naturalWidth) {
+          ctx.globalAlpha = 0.9 * fade;
+          ctx.drawImage(e.img, -22, -48, 36, 52);
+        }
+        ctx.restore();
+      } else if (e.type === "syrupBomb") {
+        if (e.phase === "wait") {
+          /* invisible until fall */
+        } else {
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.translate(e.x, e.y);
+          ctx.rotate(e.rot || 0);
+          if (e.img && e.img.complete && e.img.naturalWidth) {
+            ctx.drawImage(e.img, -e.w / 2, -e.h / 2, e.w, e.h);
+          } else {
+            ctx.fillStyle = "#c4782a";
+            ctx.fillRect(-e.w / 2, -e.h / 2, e.w, e.h);
+          }
+          ctx.restore();
+        }
       } else if (e.type === "shockwave") {
         const prog = 1 - Math.max(0, e.life) / (e.maxLife || 0.42);
         const rr = e.radius + (e.maxRadius - e.radius) * prog;
@@ -2047,9 +2455,17 @@ window.CBEffects = (function () {
     spawnShockwave,
     spawnWineSpill,
     wineSlowAt,
+    spawnSyrupSpill,
+    syrupAt,
+    isFrozen,
+    spawnSyrupBomb,
     spawnAcidRain,
     inAcidRain,
     spawnWarship,
+    spawnDumplingMine,
+    getDumplingMine,
+    detonateDumplingMine,
+    spawnSocialCredit,
     spawnWrathLightning,
     spawnFinisherCross,
     spawnDeagleSpin,
